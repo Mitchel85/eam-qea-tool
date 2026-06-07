@@ -177,12 +177,55 @@ class QEAAnalyzer:
     implicit relationships exist, and how the tables connect.
     """
     
-    def __init__(self, qea_path: str):
+    # Open WebUI path aliases — resolve /mnt/data/ to actual mounts
+    _PATH_ALIASES = [
+        ("/mnt/data/", "/app/backend/data/uploads/"),
+    ]
+    _FALLBACK_DIRS = [
+        "/app/backend/data/uploads",
+        "/app/backend/data",
+    ]
+    
+    @staticmethod
+    def _resolve_path(qea_path: str = None) -> Path:
+        """Resolve QEA file path with Open WebUI path alias awareness."""
+        path = Path(qea_path)
+        if path.exists():
+            return path
+        
+        for alias, real in QEAAnalyzer._PATH_ALIASES:
+            if qea_path.startswith(alias):
+                remapped = Path(real) / qea_path[len(alias):]
+                if remapped.exists():
+                    return remapped
+        
+        filename = path.name
+        for dir_path in QEAAnalyzer._FALLBACK_DIRS:
+            candidate = Path(dir_path) / filename
+            if candidate.exists():
+                return candidate
+        
+        for dir_path in QEAAnalyzer._FALLBACK_DIRS:
+            if not Path(dir_path).exists():
+                continue
+            for f in Path(dir_path).iterdir():
+                if f.is_file() and f.name.endswith(f"_{filename}"):
+                    return f
+        
+        raise FileNotFoundError(
+            f"QEA file not found: {qea_path}\n"
+            f"Searched: {qea_path}" +
+            "".join(f"\n  - {Path(real) / qea_path[len(alias):]}" 
+                     for alias, real in QEAAnalyzer._PATH_ALIASES 
+                     if qea_path.startswith(alias)) +
+            "".join(f"\n  - {dir_path}/{filename}"
+                     for dir_path in QEAAnalyzer._FALLBACK_DIRS)
+        )
+    
+    def __init__(self, qea_path: str = None):
         """Open a QEA file (SQLite database)."""
-        self.qea_path = Path(qea_path)
-        if not self.qea_path.exists():
-            raise FileNotFoundError(f"QEA file not found: {qea_path}")
-        self.conn = sqlite3.connect(str(qea_path))
+        self.qea_path = self._resolve_path(qea_path)
+        self.conn = sqlite3.connect(str(self.qea_path))
         self.conn.row_factory = sqlite3.Row
         self._cache = {}
     
@@ -1006,8 +1049,18 @@ class QEAAnalyzer:
 
 class Tools:
     """
-    Open WebUI Tools class.
-    Each method decorated with @tool becomes callable by the LLM.
+    EAM QEA Analyzer — Tools for Sparx Enterprise Architect Models.
+    
+    CRITICAL INSTRUCTION FOR THE LLM:
+    When the user uploads a .qea or .qeax file, DO NOT rely on your internal document/RAG retrieval. 
+    You MUST use the tools provided here to query the SQLite database structure directly.
+    The qea_path parameter is OPTIONAL in all functions. If you omit it, the tool will automatically 
+    discover and use the most recently uploaded .qea file from the user.
+    
+    Workflow for analyzing QEA models:
+    1. Call `analyze_qea_statistics()` first to get an overview of element types and counts.
+    2. Call `find_elements_in_qea(stereotype='...')` to find specific architecture elements (like 'Capability').
+    3. Call `get_element_detail_from_qea(element_id=...)` to get full relationships and properties.
     """
     
     class Valves:
@@ -1017,7 +1070,85 @@ class Tools:
     def __init__(self):
         self.valves = self.Valves()
     
-    async def analyze_qea_statistics(self, qea_path: str) -> str:
+    # ── PATH RESOLUTION ─────────────────────────────────────
+    
+    _QEA_SEARCH_DIRS = [
+        "/app/backend/data/uploads",
+        "/app/backend/data",
+        "/mnt/data",
+    ]
+    
+    @staticmethod
+    def _discover_qea_files() -> list:
+        """Auto-discover all .qea files in known upload directories."""
+        files = []
+        seen = set()
+        for dir_path in Tools._QEA_SEARCH_DIRS:
+            if not os.path.isdir(dir_path):
+                continue
+            try:
+                for entry in os.scandir(dir_path):
+                    if not entry.is_file():
+                        continue
+                    name = entry.name
+                    if not (name.endswith('.qea') or name.endswith('.qeax')):
+                        continue
+                    path = entry.path
+                    if path in seen:
+                        continue
+                    seen.add(path)
+                    stat = entry.stat()
+                    size_mb = stat.st_size / (1024 * 1024)
+                    files.append({
+                        "name": name,
+                        "path": path,
+                        "size_mb": round(size_mb, 2),
+                    })
+            except PermissionError:
+                continue
+        files.sort(key=lambda f: f["size_mb"], reverse=True)
+        return files
+    
+    @staticmethod
+    def _resolve_qea_path(qea_path: str = None) -> str:
+        """Resolve QEA file path, auto-discovering if needed."""
+        if qea_path:
+            try:
+                resolved = QEAAnalyzer._resolve_path(qea_path)
+                return str(resolved)
+            except FileNotFoundError:
+                pass
+        
+        files = Tools._discover_qea_files()
+        if not files:
+            raise FileNotFoundError(
+                "No QEA files found in upload directories. "
+                "Please upload a .qea file first."
+            )
+        return files[0]["path"]
+    
+    async def list_available_qea_files(self) -> str:
+        """
+        List all available QEA files in the upload directories.
+        Use when the user asks what models are available.
+        """
+        try:
+            files = self._discover_qea_files()
+            if not files:
+                return json.dumps({
+                    "message": "No QEA files found. Please upload a .qea file.",
+                    "files": []
+                }, indent=2)
+            return json.dumps({
+                "message": f"Found {len(files)} QEA file(s)",
+                "files": files
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+    
+    # ── ANALYSIS FUNCTIONS ──────────────────────────────────
+    
+    async def analyze_qea_statistics(self, qea_path: str = None) -> str:
         """
         Get comprehensive statistics about a QEA model.
         Shows element types, stereotypes, and counts.
@@ -1026,7 +1157,8 @@ class Tools:
             qea_path: Absolute path to the .qea file
         """
         try:
-            analyzer = QEAAnalyzer(qea_path)
+            path = self._resolve_qea_path(qea_path)
+            analyzer = QEAAnalyzer(path)
             stats = analyzer.get_model_statistics()
             analyzer.close()
             return json.dumps(stats, indent=2, ensure_ascii=False)
@@ -1034,7 +1166,7 @@ class Tools:
             return json.dumps({"error": str(e)})
     
     async def find_elements_in_qea(
-        self, qea_path: str, name: str = None, object_type: str = None,
+        self, qea_path: str = None, name: str = None, object_type: str = None,
         stereotype: str = None, package_id: int = None, limit: int = 50
     ) -> str:
         """
@@ -1049,7 +1181,8 @@ class Tools:
             limit: Maximum results (default 50)
         """
         try:
-            analyzer = QEAAnalyzer(qea_path)
+            path = self._resolve_qea_path(qea_path)
+            analyzer = QEAAnalyzer(path)
             results = analyzer.find_elements(
                 name=name, object_type=object_type,
                 stereotype=stereotype, package_id=package_id, limit=limit
@@ -1060,18 +1193,19 @@ class Tools:
             return json.dumps({"error": str(e)})
     
     async def get_element_detail_from_qea(
-        self, qea_path: str, element_id: int
+        self, qea_path: str = None, element_id: int = None
     ) -> str:
         """
         Get complete detail for one element: attributes, operations,
         relationships, tagged values, implicit relationships, and diagrams.
         
         Args:
-            qea_path: Absolute path to the .qea file
+            qea_path: Path to the .qea file. If omitted, auto-discovers.
             element_id: The Object_ID of the element
         """
         try:
-            analyzer = QEAAnalyzer(qea_path)
+            path = self._resolve_qea_path(qea_path)
+            analyzer = QEAAnalyzer(path)
             detail = analyzer.get_element_detail(element_id)
             analyzer.close()
             return json.dumps(detail, indent=2, ensure_ascii=False, default=str)
@@ -1079,7 +1213,7 @@ class Tools:
             return json.dumps({"error": str(e)})
     
     async def get_relationships_from_qea(
-        self, qea_path: str, element_id: int = None,
+        self, qea_path: str = None, element_id: int = None,
         connector_type: str = None, stereotype: str = None, limit: int = 100
     ) -> str:
         """
@@ -1093,7 +1227,8 @@ class Tools:
             limit: Maximum results
         """
         try:
-            analyzer = QEAAnalyzer(qea_path)
+            path = self._resolve_qea_path(qea_path)
+            analyzer = QEAAnalyzer(path)
             results = analyzer.get_relationships(
                 element_id=element_id, connector_type=connector_type,
                 stereotype=stereotype, limit=limit
@@ -1103,7 +1238,7 @@ class Tools:
         except Exception as e:
             return json.dumps({"error": str(e)})
     
-    async def search_qea_elements(self, qea_path: str, query: str, limit: int = 50) -> str:
+    async def search_qea_elements(self, qea_path: str = None, query: str = "", limit: int = 50) -> str:
         """
         Full-text search across element names and notes in a QEA file.
         
@@ -1113,14 +1248,15 @@ class Tools:
             limit: Maximum results
         """
         try:
-            analyzer = QEAAnalyzer(qea_path)
+            path = self._resolve_qea_path(qea_path)
+            analyzer = QEAAnalyzer(path)
             results = analyzer.search_elements(query, limit)
             analyzer.close()
             return json.dumps(results, indent=2, ensure_ascii=False)
         except Exception as e:
             return json.dumps({"error": str(e)})
     
-    async def get_package_tree_from_qea(self, qea_path: str) -> str:
+    async def get_package_tree_from_qea(self, qea_path: str = None) -> str:
         """
         Get the complete package/folder hierarchy from a QEA file.
         
@@ -1128,7 +1264,8 @@ class Tools:
             qea_path: Absolute path to the .qea file
         """
         try:
-            analyzer = QEAAnalyzer(qea_path)
+            path = self._resolve_qea_path(qea_path)
+            analyzer = QEAAnalyzer(path)
             tree = analyzer.get_package_tree()
             analyzer.close()
             return json.dumps(tree, indent=2, ensure_ascii=False)
@@ -1136,7 +1273,7 @@ class Tools:
             return json.dumps({"error": str(e)})
     
     async def find_elements_by_tagged_value(
-        self, qea_path: str, tag_name: str, tag_value: str = None, limit: int = 100
+        self, qea_path: str = None, tag_name: str = "", tag_value: str = None, limit: int = 100
     ) -> str:
         """
         Find elements by their tagged values. Essential for NAF architectures
@@ -1149,14 +1286,15 @@ class Tools:
             limit: Maximum results
         """
         try:
-            analyzer = QEAAnalyzer(qea_path)
+            path = self._resolve_qea_path(qea_path)
+            analyzer = QEAAnalyzer(path)
             results = analyzer.find_elements_by_tag(tag_name, tag_value, limit)
             analyzer.close()
             return json.dumps(results, indent=2, ensure_ascii=False)
         except Exception as e:
             return json.dumps({"error": str(e)})
     
-    async def get_qea_diagrams(self, qea_path: str) -> str:
+    async def get_qea_diagrams(self, qea_path: str = None) -> str:
         """
         List all diagrams in a QEA file with their element counts.
         
@@ -1164,7 +1302,8 @@ class Tools:
             qea_path: Absolute path to the .qea file
         """
         try:
-            analyzer = QEAAnalyzer(qea_path)
+            path = self._resolve_qea_path(qea_path)
+            analyzer = QEAAnalyzer(path)
             diagrams = analyzer.get_diagrams()
             analyzer.close()
             return json.dumps(diagrams, indent=2, ensure_ascii=False)
@@ -1172,7 +1311,7 @@ class Tools:
             return json.dumps({"error": str(e)})
     
     async def get_naf_view_elements_from_qea(
-        self, qea_path: str, view_type: str
+        self, qea_path: str = None, view_type: str = "NAF-3"
     ) -> str:
         """
         Get elements belonging to a NAF view type (NAF-2 through NAF-7).
@@ -1182,7 +1321,8 @@ class Tools:
             view_type: NAF view type (e.g., 'NAF-3', 'NAF-4', 'NAF-5')
         """
         try:
-            analyzer = QEAAnalyzer(qea_path)
+            path = self._resolve_qea_path(qea_path)
+            analyzer = QEAAnalyzer(path)
             results = analyzer.get_naf_view_elements(view_type)
             analyzer.close()
             return json.dumps(results, indent=2, ensure_ascii=False)
@@ -1190,7 +1330,7 @@ class Tools:
             return json.dumps({"error": str(e)})
     
     async def execute_qea_sql(
-        self, qea_path: str, sql: str, limit: int = 100
+        self, qea_path: str = None, sql: str = "", limit: int = 100
     ) -> str:
         """
         Execute a read-only SQL query against a QEA file.
@@ -1203,14 +1343,15 @@ class Tools:
             limit: Maximum rows to return
         """
         try:
-            analyzer = QEAAnalyzer(qea_path)
+            path = self._resolve_qea_path(qea_path)
+            analyzer = QEAAnalyzer(path)
             results = analyzer.execute_query(sql, limit)
             analyzer.close()
             return json.dumps(results, indent=2, ensure_ascii=False, default=str)
         except Exception as e:
             return json.dumps({"error": str(e)})
     
-    async def get_qea_table_schema(self, qea_path: str, table_name: str = None) -> str:
+    async def get_qea_table_schema(self, qea_path: str = None, table_name: str = None) -> str:
         """
         Get the column schema for tables in a QEA file.
         If no table specified, returns all table names.
@@ -1220,7 +1361,8 @@ class Tools:
             table_name: Specific table name (optional, e.g., 't_object')
         """
         try:
-            analyzer = QEAAnalyzer(qea_path)
+            path = self._resolve_qea_path(qea_path)
+            analyzer = QEAAnalyzer(path)
             if table_name:
                 schema = analyzer.get_table_schema(table_name)
             else:
@@ -1231,7 +1373,7 @@ class Tools:
             return json.dumps({"error": str(e)})
     
     async def export_qea_element_report(
-        self, qea_path: str, element_name: str
+        self, qea_path: str = None, element_name: str = ""
     ) -> str:
         """
         Export a comprehensive report for a named element — includes
@@ -1242,7 +1384,8 @@ class Tools:
             element_name: Name of the element to report on
         """
         try:
-            analyzer = QEAAnalyzer(qea_path)
+            path = self._resolve_qea_path(qea_path)
+            analyzer = QEAAnalyzer(path)
             report = analyzer.export_element_report(element_name)
             analyzer.close()
             return json.dumps(report, indent=2, ensure_ascii=False, default=str)

@@ -8,7 +8,8 @@ Du hast Zugriff auf die `eam_qea_tool.py` Functions. Nutze sie für alle QEA-Ana
 
 | Funktion | Zweck |
 |----------|-------|
-| `analyze_qea_statistics` | Modell-Statistiken (Elementtypen, Stereotypen) |
+| `analyze_qea_statistics` | Modell-Statistiken (Elementtypen, Stereotypen) — **qea_path optional!** |
+| `list_available_qea_files` | Alle verfügbaren QEA-Dateien auflisten |
 | `find_elements_in_qea` | Elemente nach Name/Typ/Stereotyp/Paket suchen |
 | `get_element_detail_from_qea` | Vollständige Element-Details inkl. Beziehungen |
 | `get_relationships_from_qea` | Beziehungen mit Rollen, Kardinalitäten |
@@ -116,12 +117,15 @@ NAF-Metadaten (z.B. Einsatzattribute, Fähigkeitsmaße, Sicherheitsklassifikatio
 
 ## Analyse-Vorgehen
 
-1. **Erstorientierung:** Nutze `analyze_qea_statistics` für Überblick
+**WICHTIG: QEA-Dateipfad ist OPTIONAL!** Wenn der Nutzer eine `.qea`-Datei hochgeladen hat, lasse den `qea_path`-Parameter einfach WEG (oder übergib `null`). Das Tool findet die Datei automatisch in den Upload-Verzeichnissen. Nur wenn mehrere QEA-Dateien verfügbar sind und der Nutzer eine bestimmte meint, nutze `list_available_qea_files` zur Auswahl.
+
+1. **Erstorientierung:** Nutze `analyze_qea_statistics` (OHNE Pfad!) für Überblick
 2. **Paket-Struktur:** Nutze `get_package_tree_from_qea` für Navigation
 3. **Gezielte Suche:** `find_elements_in_qea` oder `search_qea_elements`
 4. **Detail-Analyse:** `get_element_detail_from_qea` für vollständiges Bild
 5. **NAF-Analyse:** `find_elements_by_tagged_value` + `get_naf_view_elements_from_qea`
 6. **Fortgeschritten:** `execute_qea_sql` mit AAroN-informierten JOINs für komplexe Fragen
+7. **Dateien auflisten:** `list_available_qea_files` zeigt alle verfügbaren Modelle
 
 ## SQL-Tipps für execute_qea_sql
 
