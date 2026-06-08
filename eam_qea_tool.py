@@ -13,15 +13,19 @@ Usage as Open WebUI Tool:
 
 Author: Clawdia 🦞 — Built from AAroN source analysis
 Date: 2026-06-06
+requirements: networkx, pandas
 """
 
 import sqlite3
 import json
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Any
-from collections import defaultdict
+
+import networkx as nx
+import pandas as pd
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -166,6 +170,503 @@ NAF_VIEW_STEREOTYPES = {
 # t_objectproperties: property_id, object_id, property, value, notes, ea_guid
 # t_connectortag: property_id, element_id, property, value, notes, ea_guid
 # t_attributetag: property_id, element_id, property, value, notes, ea_guid
+
+
+# Diagram-based activity process extraction constants (ported from local pipeline).
+DIAGRAM_ALLOWED_CONNECTOR_TYPES = {"ControlFlow", "StateFlow", "Transition"}
+ALLOWED_FLOW_NODE_TYPES = {"Action", "Decision", "Event"}
+
+BANNED_OBJECT_TYPES = {"Package", "Text", "Issue"}
+BANNED_STEREOTYPES = {
+    "Classification",
+    "ResourceRole",
+    "RequirementCategory",
+    "Viewpoint",
+    "Concern",
+    "OperationalConstraint",
+    "InformationElement",
+    "DataElement",
+    "FunctionalRequirement",
+    "OperationalRole",
+    "Project",
+    "Standard",
+    "OperationalPerformer",
+    "ActualProject",
+    "Recommendation",
+    "Finding",
+}
+
+
+MAX_PROCESS_RESPONSE_CHARS = 120000
+
+
+def _guard_process_response_size(obj: Any, label: str = "process_response") -> Any:
+    text = json.dumps(obj, ensure_ascii=False, default=str)
+    if len(text) > MAX_PROCESS_RESPONSE_CHARS:
+        raise ValueError(
+            f"{label} too large: {len(text)} chars. "
+            "Use compact listing or tighter max_nodes/max_edges limits."
+        )
+    return obj
+
+
+def pg_clean_str(value: Any) -> str:
+    if value is None:
+        return ""
+    s = str(value)
+    return "" if s.lower() == "nan" else s
+
+
+def pg_normalize_whitespace(value: Any) -> str:
+    return " ".join(pg_clean_str(value).split())
+
+
+def pg_safe_snippet(value: Any, max_chars: int = 500) -> str:
+    text = pg_clean_str(value)
+    return text if len(text) <= max_chars else text[:max_chars] + "..."
+
+
+def pg_node_evidence_id(activity_id: int, object_id: int) -> str:
+    return f"EA:Activity:{activity_id}:Object:{object_id}"
+
+
+def pg_to_int(value: Any) -> int:
+    if value is None:
+        return 0
+    s = str(value).replace("nan", "").strip()
+    if not s:
+        return 0
+    try:
+        return int(float(s))
+    except Exception:
+        return 0
+
+
+def pg_pick_col(row: dict[str, Any], candidates: list[str], fallback: Any = "") -> Any:
+    for candidate in candidates:
+        if candidate in row:
+            return row[candidate]
+    return fallback
+
+
+@dataclass
+class ProcessActivityGraph:
+    activity_id: int
+    activity_name: str
+    graph: nx.DiGraph
+    seed_count: int = 0
+    diagram: Optional[dict[str, Any]] = None
+    extraction_warning: str = ""
+
+
+def pg_build_package_map(t_package: pd.DataFrame) -> dict[int, dict[str, Any]]:
+    package_map: dict[int, dict[str, Any]] = {}
+    for _, row in t_package.iterrows():
+        package_id = pg_to_int(row.get("Package_ID"))
+        package_map[package_id] = {
+            "id": package_id,
+            "name": pg_clean_str(row.get("Name")),
+            "parent_id": pg_to_int(row.get("Parent_ID")),
+            "children": [],
+        }
+    for package_id, pkg in package_map.items():
+        parent_id = pkg.get("parent_id", 0)
+        if parent_id in package_map:
+            package_map[parent_id]["children"].append(package_id)
+    return package_map
+
+
+def pg_package_path_name(package_id: int, package_map: dict[int, dict[str, Any]]) -> str:
+    if package_id not in package_map:
+        return f"Package {package_id}"
+    parts: list[str] = []
+    cur = package_id
+    seen: set[int] = set()
+    while cur and cur in package_map and cur not in seen:
+        seen.add(cur)
+        pkg = package_map[cur]
+        parts.append(pkg.get("name") or f"Package {cur}")
+        cur = pg_to_int(pkg.get("parent_id"))
+    return " / ".join(reversed(parts))
+
+
+def pg_normalize_path(value: str) -> str:
+    return " / ".join(
+        part for part in (" ".join(pg_clean_str(p).strip().lower().split()) for p in pg_clean_str(value).split("/")) if part
+    )
+
+
+def pg_find_package_ids_by_path(package_map: dict[int, dict[str, Any]], package_path: str) -> set[int]:
+    wanted = pg_normalize_path(package_path)
+    return {
+        package_id
+        for package_id in package_map
+        if pg_normalize_path(pg_package_path_name(package_id, package_map)) == wanted
+    }
+
+
+def pg_expand_selected_packages(
+    selected_ids: set[int],
+    package_map: dict[int, dict[str, Any]],
+    include_subpackages: bool = True,
+) -> set[int]:
+    out = set(selected_ids)
+    if not include_subpackages:
+        return out
+    stack = list(selected_ids)
+    while stack:
+        package_id = stack.pop()
+        for child in package_map.get(package_id, {}).get("children", []):
+            if child not in out:
+                out.add(child)
+                stack.append(child)
+    return out
+
+
+def pg_build_object_index(
+    t_object: pd.DataFrame,
+    package_map: Optional[dict[int, dict[str, Any]]] = None,
+) -> dict[int, dict[str, Any]]:
+    package_map = package_map or {}
+    object_index: dict[int, dict[str, Any]] = {}
+    for _, row in t_object.iterrows():
+        object_id = pg_to_int(row.get("Object_ID"))
+        package_id = pg_to_int(row.get("Package_ID"))
+        object_index[object_id] = {
+            "object_id": object_id,
+            "object_type": pg_clean_str(row.get("Object_Type")),
+            "stereotype": pg_clean_str(row.get("Stereotype")),
+            "stereotype_ex": pg_clean_str(row.get("StereotypeEx")),
+            "parent_id": pg_to_int(row.get("ParentID")),
+            "package_id": package_id,
+            "package_path": pg_package_path_name(package_id, package_map),
+            "label": pg_clean_str(row.get("Name")),
+
+            "note": pg_clean_str(row.get("Note")),
+            "classifier": pg_to_int(row.get("Classifier")),
+
+        }
+    return object_index
+
+
+def pg_resolve_activity_id_for_object(
+    obj_id: int,
+    object_index: dict[int, dict[str, Any]],
+    max_hops: int = 50,
+) -> Optional[int]:
+    cur = obj_id
+    hops = 0
+    seen: set[int] = set()
+    while cur and hops < max_hops and cur not in seen:
+        seen.add(cur)
+        hops += 1
+        obj = object_index.get(cur)
+        if not obj:
+            return None
+        if obj.get("object_type") == "Activity":
+            return cur
+        cur = pg_to_int(obj.get("parent_id"))
+    return None
+
+
+def pg_is_activity_partition(obj: Optional[dict[str, Any]]) -> bool:
+    return bool(obj and obj.get("object_type") == "ActivityPartition")
+
+
+def pg_is_lane_or_pool_node(obj: Optional[dict[str, Any]]) -> bool:
+    st = (
+        pg_clean_str((obj or {}).get("stereotype"))
+        + " "
+        + pg_clean_str((obj or {}).get("stereotype_ex"))
+    ).lower()
+    return pg_is_activity_partition(obj) and ("lane" in st or "pool" in st)
+
+
+def pg_resolve_lane_for_object(
+    obj: Optional[dict[str, Any]],
+    object_index: dict[int, dict[str, Any]],
+) -> Optional[dict[str, Any]]:
+    if not obj:
+        return None
+    parent_obj = object_index.get(pg_to_int(obj.get("parent_id")))
+    if not parent_obj or not pg_is_activity_partition(parent_obj):
+        return None
+    return {
+        "lane_id": pg_to_int(parent_obj.get("object_id")),
+        "lane_label": pg_clean_str(parent_obj.get("label")),
+        "lane_stereotype": pg_clean_str(parent_obj.get("stereotype"))
+        or pg_clean_str(parent_obj.get("stereotype_ex"))
+        or "ActivityPartition",
+    }
+
+
+def pg_is_allowed_diagram_flow_node(obj: Optional[dict[str, Any]]) -> bool:
+    if not obj:
+        return False
+    if obj.get("object_type") == "Activity":
+        return False
+    if pg_is_activity_partition(obj) or pg_is_lane_or_pool_node(obj):
+        return False
+    return obj.get("object_type") in ALLOWED_FLOW_NODE_TYPES
+
+
+def pg_is_banned_object(obj: Optional[dict[str, Any]]) -> bool:
+    return (
+        obj is None
+        or obj.get("object_type") in BANNED_OBJECT_TYPES
+        or obj.get("stereotype") in BANNED_STEREOTYPES
+    )
+
+
+def pg_is_gateway_node(data: dict[str, Any]) -> bool:
+    label = pg_clean_str(data.get("label"))
+    return (
+        data.get("stereotype") == "Gateway"
+        and data.get("object_type") == "Decision"
+        and (not label or "gateway" in label.lower())
+    )
+
+
+def pg_add_merged_edge(graph: nx.DiGraph, u: int, v: int, data: Optional[dict[str, Any]] = None) -> None:
+    data = data or {}
+    if u not in graph or v not in graph:
+        return
+    if graph.has_edge(u, v):
+        existing = graph.edges[u, v]
+        old_label = pg_clean_str(existing.get("label"))
+        new_label = pg_clean_str(data.get("label"))
+        if new_label and not old_label:
+            existing["label"] = new_label
+        elif new_label and old_label and new_label != old_label:
+            existing["label"] = f"{old_label} / {new_label}"
+        if data.get("connector_type") and not existing.get("connector_type"):
+            existing["connector_type"] = data.get("connector_type")
+        if data.get("connector_id") and not existing.get("connector_id"):
+            existing["connector_id"] = data.get("connector_id")
+    else:
+        graph.add_edge(u, v, **data)
+
+
+def pg_post_process_activity_graph(graph: nx.DiGraph) -> nx.DiGraph:
+    for node, data in list(graph.nodes(data=True)):
+        if node not in graph or not pg_is_gateway_node(data):
+            continue
+        predecessors = list(graph.predecessors(node))
+        successors = list(graph.successors(node))
+        for pred in predecessors:
+            for succ in successors:
+                if pred != succ:
+                    pg_add_merged_edge(
+                        graph,
+                        pred,
+                        succ,
+                        {"label": "gateway_bypass", "connector_type": "synthetic"},
+                    )
+        graph.remove_node(node)
+
+    for node, data in list(graph.nodes(data=True)):
+        if node not in graph:
+            continue
+        if data.get("object_type") != "Event" and not pg_clean_str(data.get("label")):
+            graph.remove_node(node)
+        elif data.get("object_type") == "ActivityPartition":
+            graph.remove_node(node)
+
+    for node in list(graph.nodes()):
+        if node in graph and graph.degree(node) == 0:
+            graph.remove_node(node)
+    return graph
+
+
+def pg_build_connector_by_id(t_connector: pd.DataFrame) -> dict[int, dict[str, Any]]:
+    out: dict[int, dict[str, Any]] = {}
+    for _, row in t_connector.iterrows():
+        record = row.to_dict()
+        connector_id = pg_to_int(record.get("Connector_ID"))
+        if connector_id:
+            out[connector_id] = record
+    return out
+
+
+def pg_df_rows(df: pd.DataFrame) -> list[dict[str, Any]]:
+    if df is None or df.empty:
+        return []
+    return [row.to_dict() for _, row in df.iterrows()]
+
+
+def pg_build_diagram_indexes(
+    t_diagram: pd.DataFrame,
+    t_diagramobjects: pd.DataFrame,
+    t_diagramlinks: pd.DataFrame,
+) -> dict[str, dict[int, list[dict[str, Any]]]]:
+    diagrams_by_parent: dict[int, list[dict[str, Any]]] = {}
+    for row in pg_df_rows(t_diagram):
+        diagram_id = pg_to_int(pg_pick_col(row, ["Diagram_ID", "DiagramID"], 0))
+        parent_id = pg_to_int(pg_pick_col(row, ["ParentID", "Parent_ID", "ElementID", "Object_ID"], 0))
+        if not diagram_id:
+            continue
+        item = {
+            "diagram_id": diagram_id,
+            "name": pg_clean_str(pg_pick_col(row, ["Name"], "")),
+            "parent_id": parent_id,
+            "raw": row,
+        }
+        diagrams_by_parent.setdefault(parent_id, []).append(item)
+    for arr in diagrams_by_parent.values():
+        arr.sort(key=lambda x: x["diagram_id"])
+
+    diagram_objects_by_diagram: dict[int, list[dict[str, Any]]] = {}
+    for row in pg_df_rows(t_diagramobjects):
+        diagram_id = pg_to_int(pg_pick_col(row, ["Diagram_ID", "DiagramID"], 0))
+        element_id = pg_to_int(pg_pick_col(row, ["Object_ID", "ElementID"], 0))
+        if not diagram_id or not element_id:
+            continue
+        diagram_objects_by_diagram.setdefault(diagram_id, []).append(
+            {"diagram_id": diagram_id, "element_id": element_id, "raw": row}
+        )
+
+    diagram_links_by_diagram: dict[int, list[dict[str, Any]]] = {}
+    for row in pg_df_rows(t_diagramlinks):
+        diagram_id = pg_to_int(pg_pick_col(row, ["DiagramID", "Diagram_ID"], 0))
+        connector_id = pg_to_int(pg_pick_col(row, ["ConnectorID", "Connector_ID"], 0))
+        if not diagram_id or not connector_id:
+            continue
+        hidden_raw = pg_pick_col(row, ["Hidden", "IsHidden"], 0)
+        hidden = (
+            hidden_raw is True
+            or hidden_raw == 1
+            or pg_clean_str(hidden_raw).lower() == "true"
+            or pg_clean_str(hidden_raw) == "1"
+        )
+        diagram_links_by_diagram.setdefault(diagram_id, []).append(
+            {
+                "diagram_id": diagram_id,
+                "connector_id": connector_id,
+                "hidden": hidden,
+                "raw": row,
+            }
+        )
+
+    return {
+        "diagrams_by_parent": diagrams_by_parent,
+        "diagram_objects_by_diagram": diagram_objects_by_diagram,
+        "diagram_links_by_diagram": diagram_links_by_diagram,
+    }
+
+
+def pg_find_main_diagram_for_activity(
+    activity_id: int,
+    activity_name: str,
+    diagram_indexes: dict[str, dict[int, list[dict[str, Any]]]],
+) -> Optional[dict[str, Any]]:
+    diagrams = diagram_indexes["diagrams_by_parent"].get(activity_id, [])
+    if not diagrams:
+        return None
+    same_name = next(
+        (d for d in diagrams if pg_clean_str(d.get("name")) == pg_clean_str(activity_name)),
+        None,
+    )
+    return same_name or diagrams[0]
+
+
+def pg_build_activity_graph(
+    activity_id: int,
+    activity_name: str,
+    object_index: dict[int, dict[str, Any]],
+    connector_by_id: dict[int, dict[str, Any]],
+    diagram_indexes: dict[str, dict[int, list[dict[str, Any]]]],
+) -> ProcessActivityGraph:
+    diagram = pg_find_main_diagram_for_activity(activity_id, activity_name, diagram_indexes)
+    graph = nx.DiGraph(activity_id=activity_id, activity_name=activity_name)
+    if not diagram:
+        return ProcessActivityGraph(
+            activity_id=activity_id,
+            activity_name=activity_name,
+            graph=graph,
+            seed_count=0,
+            diagram=None,
+            extraction_warning="No child diagram found",
+        )
+
+    visible_element_ids: set[int] = set()
+    diagram_id = pg_to_int(diagram.get("diagram_id"))
+    diagram_objects = diagram_indexes["diagram_objects_by_diagram"].get(diagram_id, [])
+
+    for dobj in diagram_objects:
+        obj_id = pg_to_int(dobj.get("element_id"))
+        obj = object_index.get(obj_id, {})
+        if not pg_is_allowed_diagram_flow_node(obj):
+            continue
+        if pg_is_banned_object(obj):
+            continue
+        visible_element_ids.add(obj_id)
+        lane = pg_resolve_lane_for_object(obj, object_index)
+        graph.add_node(
+            obj_id,
+            id=pg_node_evidence_id(activity_id, obj_id),
+            object_id=obj_id,
+            label=obj.get("label", ""),
+            normalized_label=pg_normalize_whitespace(obj.get("label", "")).lower(),
+            object_type=obj.get("object_type", ""),
+            stereotype=obj.get("stereotype", ""),
+            lane=lane,
+            parent_id=pg_to_int(obj.get("parent_id")),
+            package_id=pg_to_int(obj.get("package_id")),
+            classifier=pg_to_int(obj.get("classifier")),
+            resolved_activity_id=pg_resolve_activity_id_for_object(obj_id, object_index) or activity_id,
+            note_snippet=pg_safe_snippet(obj.get("note", ""), 400),
+            activity_id=activity_id,
+            diagram_id=diagram_id,
+            diagram_name=diagram.get("name", ""),
+        )
+
+    diagram_links = diagram_indexes["diagram_links_by_diagram"].get(diagram_id, [])
+    for link in diagram_links:
+        if link.get("hidden"):
+            continue
+        connector_id = pg_to_int(link.get("connector_id"))
+        row = connector_by_id.get(connector_id)
+        if not row:
+            continue
+        start = pg_to_int(row.get("Start_Object_ID"))
+        end = pg_to_int(row.get("End_Object_ID"))
+        connector_type = pg_clean_str(row.get("Connector_Type"))
+        if connector_type not in DIAGRAM_ALLOWED_CONNECTOR_TYPES:
+            continue
+        if start in visible_element_ids and end in visible_element_ids and start in graph and end in graph:
+            pg_add_merged_edge(
+                graph,
+                start,
+                end,
+                {
+                    "label": pg_clean_str(row.get("Name")),
+                    "connector_type": connector_type,
+                    "connector_id": connector_id,
+                },
+            )
+
+    pg_post_process_activity_graph(graph)
+    return ProcessActivityGraph(
+        activity_id=activity_id,
+        activity_name=activity_name,
+        graph=graph,
+        seed_count=len(visible_element_ids),
+        diagram=diagram,
+    )
+
+
+def pg_package_summary(
+    package_id: int,
+    package_map: dict[int, dict[str, Any]],
+) -> dict[str, Any]:
+    pkg = package_map.get(package_id, {})
+    return {
+        "package_id": package_id,
+        "name": pkg.get("name", ""),
+        "parent_id": pkg.get("parent_id", 0),
+        "path": pg_package_path_name(package_id, package_map),
+        "child_count": len(pkg.get("children", []) or []),
+    }
 
 
 class QEAAnalyzer:
@@ -1022,6 +1523,283 @@ class QEAAnalyzer:
         """, (diagram_id,))
         
         return result
+
+    # ── PROCESS DISCOVERY & EXTRACTION (DIAGRAM-BASED) ─────
+
+    def _read_table_df(self, table_name: str) -> pd.DataFrame:
+        if not self._table_exists(table_name):
+            return pd.DataFrame()
+        return pd.read_sql(f"SELECT * FROM {table_name}", self.conn)
+
+    def _read_process_tables(self) -> dict[str, pd.DataFrame]:
+        return {
+            "t_object": self._read_table_df("t_object"),
+            "t_connector": self._read_table_df("t_connector"),
+            "t_package": self._read_table_df("t_package"),
+            "t_diagram": self._read_table_df("t_diagram"),
+            "t_diagramobjects": self._read_table_df("t_diagramobjects"),
+            "t_diagramlinks": self._read_table_df("t_diagramlinks"),
+        }
+
+    def list_process_packages_and_activities(
+        self,
+        package_path: str = "",
+        include_subpackages: bool = True,
+        include_empty_packages: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Discovery endpoint for process extraction workflows.
+
+        Returns compact package summaries and Activity objects so callers can
+        select activity IDs before requesting extracted process graphs.
+        """
+        tables = self._read_process_tables()
+        t_package = tables["t_package"]
+        t_object = tables["t_object"]
+
+        if t_package.empty:
+            raise ValueError("Missing or empty t_package table")
+        if t_object.empty:
+            raise ValueError("Missing or empty t_object table")
+
+        package_map = pg_build_package_map(t_package)
+
+        if package_path:
+            selected_package_ids = pg_find_package_ids_by_path(package_map, package_path)
+            if not selected_package_ids:
+                raise ValueError(f'Package path not found: "{package_path}"')
+            scoped_package_ids = pg_expand_selected_packages(
+                selected_package_ids,
+                package_map,
+                include_subpackages=include_subpackages,
+            )
+        else:
+            scoped_package_ids = set(package_map.keys())
+
+        activities: list[dict[str, Any]] = []
+        for _, row in t_object.iterrows():
+            if pg_clean_str(row.get("Object_Type")) != "Activity":
+                continue
+
+            package_id = pg_to_int(row.get("Package_ID"))
+            if package_id not in scoped_package_ids:
+                continue
+
+            activity_id = pg_to_int(row.get("Object_ID"))
+            activities.append(
+                {
+                    "activity_id": activity_id,
+                    "activity_name": pg_clean_str(row.get("Name")),
+                    "package_id": package_id,
+                    "package_path": pg_package_path_name(package_id, package_map),
+                }
+            )
+
+        activities.sort(
+            key=lambda x: (
+                str(x.get("package_path", "")).lower(),
+                str(x.get("activity_name", "")).lower(),
+                int(x.get("activity_id", 0)),
+            )
+        )
+
+        activity_package_ids = {a["package_id"] for a in activities}
+        visible_package_ids = scoped_package_ids if include_empty_packages else activity_package_ids
+
+        packages = [
+            pg_package_summary(package_id, package_map)
+            for package_id in sorted(visible_package_ids)
+            if package_id in package_map
+        ]
+        packages.sort(key=lambda x: str(x.get("path", "")).lower())
+
+        return {
+            "database_file": str(self.qea_path),
+            "package_path_filter": package_path,
+            "include_subpackages": include_subpackages,
+            "package_count": len(packages),
+            "activity_count": len(activities),
+            "packages": packages,
+            "activities": activities,
+        }
+
+    def extract_operational_activity_graphs(
+        self,
+        package_path: str = "",
+        include_subpackages: bool = True,
+    ) -> list[ProcessActivityGraph]:
+        """
+        Build operational Activity process graphs from diagram tables.
+        """
+        tables = self._read_process_tables()
+        required = [
+            "t_object",
+            "t_connector",
+            "t_package",
+            "t_diagram",
+            "t_diagramobjects",
+            "t_diagramlinks",
+        ]
+        missing = [name for name in required if tables[name].empty]
+        if missing:
+            raise ValueError("Missing or empty required EA tables for diagram extraction: " + ", ".join(missing))
+
+        package_map = pg_build_package_map(tables["t_package"])
+        if package_path:
+            selected = pg_find_package_ids_by_path(package_map, package_path)
+            if not selected:
+                raise ValueError(f'Package path not found: "{package_path}"')
+            allowed_package_ids = pg_expand_selected_packages(
+                selected,
+                package_map,
+                include_subpackages=include_subpackages,
+            )
+        else:
+            allowed_package_ids = set(package_map.keys())
+
+        object_index = pg_build_object_index(tables["t_object"], package_map)
+        connector_by_id = pg_build_connector_by_id(tables["t_connector"])
+        diagram_indexes = pg_build_diagram_indexes(
+            tables["t_diagram"],
+            tables["t_diagramobjects"],
+            tables["t_diagramlinks"],
+        )
+
+        activities: list[tuple[int, str]] = []
+        for obj_id, obj in object_index.items():
+            if obj.get("object_type") != "Activity":
+                continue
+            if pg_to_int(obj.get("package_id")) not in allowed_package_ids:
+                continue
+            activities.append((obj_id, obj.get("label") or f"Activity {obj_id}"))
+        activities.sort(key=lambda x: x[1])
+
+        activity_graphs: list[ProcessActivityGraph] = []
+        for activity_id, activity_name in activities:
+            ag = pg_build_activity_graph(
+                activity_id,
+                activity_name,
+                object_index,
+                connector_by_id,
+                diagram_indexes,
+            )
+            if ag.graph.number_of_nodes() > 0:
+                activity_graphs.append(ag)
+
+        return activity_graphs
+
+    def summarize_extracted_activity_graphs(
+        self,
+        package_path: str = "",
+        include_subpackages: bool = True,
+        max_items: int = 500,
+    ) -> dict[str, Any]:
+        max_items = max(1, min(int(max_items), 2000))
+        activity_graphs = self.extract_operational_activity_graphs(
+            package_path=package_path,
+            include_subpackages=include_subpackages,
+        )
+
+        summaries = [
+            {
+                "activity_id": ag.activity_id,
+                "activity_name": ag.activity_name,
+                "nodes": ag.graph.number_of_nodes(),
+                "edges": ag.graph.number_of_edges(),
+                "seed_count": ag.seed_count,
+                "diagram_id": (ag.diagram or {}).get("diagram_id"),
+                "diagram_name": (ag.diagram or {}).get("name"),
+                "extraction_warning": ag.extraction_warning,
+            }
+            for ag in activity_graphs
+        ]
+
+        summaries.sort(
+            key=lambda x: (
+                str(x.get("activity_name", "")).lower(),
+                int(x.get("activity_id", 0)),
+            )
+        )
+
+        return {
+            "database_file": str(self.qea_path),
+            "package_path_filter": package_path,
+            "include_subpackages": include_subpackages,
+            "activity_count_total": len(summaries),
+            "activity_count_returned": min(len(summaries), max_items),
+            "activities": summaries[:max_items],
+            "truncated": len(summaries) > max_items,
+        }
+
+    def get_activity_diagram_process_graph(
+        self,
+        activity_id: int,
+        package_path: str = "",
+        include_subpackages: bool = True,
+        max_nodes: int = 500,
+        max_edges: int = 1000,
+    ) -> dict[str, Any]:
+        max_nodes = max(1, min(int(max_nodes), 5000))
+        max_edges = max(1, min(int(max_edges), 10000))
+
+        activity_graphs = self.extract_operational_activity_graphs(
+            package_path=package_path,
+            include_subpackages=include_subpackages,
+        )
+
+        wanted = None
+        for ag in activity_graphs:
+            if int(ag.activity_id) == int(activity_id):
+                wanted = ag
+                break
+
+        if wanted is None:
+            raise ValueError(f"Activity id not found after extraction: {activity_id}")
+
+        nodes = []
+        for node_id, data in wanted.graph.nodes(data=True):
+            node_entry = dict(data)
+            node_entry["node_id"] = int(node_id)
+            nodes.append(node_entry)
+
+        edges = []
+        for source_id, target_id, data in wanted.graph.edges(data=True):
+            edge_entry = dict(data)
+            edge_entry["source_id"] = int(source_id)
+            edge_entry["target_id"] = int(target_id)
+            edges.append(edge_entry)
+
+        nodes.sort(key=lambda x: int(x.get("node_id", 0)))
+        edges.sort(
+            key=lambda x: (
+                int(x.get("source_id", 0)),
+                int(x.get("target_id", 0)),
+            )
+        )
+
+        response = {
+            "database_file": str(self.qea_path),
+            "package_path_filter": package_path,
+            "include_subpackages": include_subpackages,
+            "activity": {
+                "activity_id": wanted.activity_id,
+                "activity_name": wanted.activity_name,
+                "nodes_total": len(nodes),
+                "edges_total": len(edges),
+                "seed_count": wanted.seed_count,
+                "diagram_id": (wanted.diagram or {}).get("diagram_id"),
+                "diagram_name": (wanted.diagram or {}).get("name"),
+                "extraction_warning": wanted.extraction_warning,
+            },
+            "nodes": nodes[:max_nodes],
+            "edges": edges[:max_edges],
+            "truncated_nodes": len(nodes) > max_nodes,
+            "truncated_edges": len(edges) > max_edges,
+            "max_nodes": max_nodes,
+            "max_edges": max_edges,
+        }
+
+        return response
     
     # ── EXPORT ─────────────────────────────────────────────
     
@@ -1061,6 +1839,9 @@ class Tools:
     1. Call `analyze_qea_statistics()` first to get an overview of element types and counts.
     2. Call `find_elements_in_qea(stereotype='...')` to find specific architecture elements (like 'Capability').
     3. Call `get_element_detail_from_qea(element_id=...)` to get full relationships and properties.
+    4. For process analysis, call `list_process_packages_and_activities()` before extraction.
+    5. Call `list_extracted_activity_graphs()` for compact extracted process summaries.
+    6. Call `get_activity_diagram_process_graph(activity_id=...)` for one detailed process graph.
     """
     
     class Valves:
@@ -1110,7 +1891,7 @@ class Tools:
         return files
     
     @staticmethod
-    def _resolve_qea_path(qea_path: str = None) -> str:
+    def _resolve_qea_path(qea_path: Optional[str] = None) -> str:
         """Resolve QEA file path, auto-discovering if needed."""
         if qea_path:
             try:
@@ -1309,6 +2090,88 @@ class Tools:
             return json.dumps(diagrams, indent=2, ensure_ascii=False)
         except Exception as e:
             return json.dumps({"error": str(e)})
+
+    async def list_process_packages_and_activities(
+        self,
+        qea_path: Optional[str] = None,
+        package_path: str = "",
+        include_subpackages: bool = True,
+        include_empty_packages: bool = True,
+    ) -> str:
+        """
+        Discover packages and Activity elements relevant to process extraction.
+
+        Use this before calling extraction endpoints.
+        """
+        try:
+            path = self._resolve_qea_path(qea_path)
+            analyzer = QEAAnalyzer(path)
+            payload = analyzer.list_process_packages_and_activities(
+                package_path=package_path,
+                include_subpackages=include_subpackages,
+                include_empty_packages=include_empty_packages,
+            )
+            analyzer.close()
+            payload = _guard_process_response_size(payload, "list_process_packages_and_activities")
+            return json.dumps(payload, indent=2, ensure_ascii=False, default=str)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    async def list_extracted_activity_graphs(
+        self,
+        qea_path: str = None,
+        package_path: str = "",
+        include_subpackages: bool = True,
+        max_items: int = 200,
+    ) -> str:
+        """
+        Return compact summaries of diagram-extracted Activity process graphs.
+        """
+        try:
+            path = self._resolve_qea_path(qea_path)
+            analyzer = QEAAnalyzer(path)
+            payload = analyzer.summarize_extracted_activity_graphs(
+                package_path=package_path,
+                include_subpackages=include_subpackages,
+                max_items=max_items,
+            )
+            analyzer.close()
+            payload = _guard_process_response_size(payload, "list_extracted_activity_graphs")
+            return json.dumps(payload, indent=2, ensure_ascii=False, default=str)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    async def get_activity_diagram_process_graph(
+        self,
+        qea_path: str = None,
+        activity_id: Optional[int] = None,
+        package_path: str = "",
+        include_subpackages: bool = True,
+        max_nodes: int = 500,
+        max_edges: int = 1000,
+    ) -> str:
+        """
+        Return one detailed diagram-extracted Activity process graph.
+
+        The payload is bounded via max_nodes and max_edges to avoid oversized outputs.
+        """
+        try:
+            if activity_id is None:
+                return json.dumps({"error": "activity_id is required"})
+            path = self._resolve_qea_path(qea_path)
+            analyzer = QEAAnalyzer(path)
+            payload = analyzer.get_activity_diagram_process_graph(
+                activity_id=activity_id,
+                package_path=package_path,
+                include_subpackages=include_subpackages,
+                max_nodes=max_nodes,
+                max_edges=max_edges,
+            )
+            analyzer.close()
+            payload = _guard_process_response_size(payload, "get_activity_diagram_process_graph")
+            return json.dumps(payload, indent=2, ensure_ascii=False, default=str)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
     
     async def get_naf_view_elements_from_qea(
         self, qea_path: str = None, view_type: str = "NAF-3"
@@ -1373,7 +2236,7 @@ class Tools:
             return json.dumps({"error": str(e)})
     
     async def export_qea_element_report(
-        self, qea_path: str = None, element_name: str = ""
+        self, qea_path: Optional[str] = None, element_name: str = ""
     ) -> str:
         """
         Export a comprehensive report for a named element — includes
