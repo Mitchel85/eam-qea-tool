@@ -135,7 +135,7 @@ eam-qea-tool/
 
 ## Lizenz
 
-Apache License 2.0 — gleiche Lizenz wie AAroN.
+Apache License 2.0 
 
 ---
 
