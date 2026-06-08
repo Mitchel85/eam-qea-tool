@@ -4,7 +4,6 @@
 >
 > Das gesamte Tabellenwissen in diesem Tool stammt aus AAroNs Java-Processors. Ohne AAroN gäbe es dieses Projekt nicht. 🙏
 
-> Versteht proprietäre QEA-Dateien nicht durch Brute-Force-SQL, sondern durch das tiefe Wissen von [AAroN](https://github.com/schmitze87/AAroN) über die Sparx Enterprise Architect Tabellenstruktur.
 
 ---
 
