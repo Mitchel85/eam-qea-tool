@@ -47,7 +47,7 @@ Dieses Tool extrahiert das Wissen aus **AAroN** — einem Neo4j-Plugin, das für
 | `get_package_tree_from_qea` | Paket-Hierarchie |
 | `find_elements_by_tagged_value` | Tagged-Value-Suche (NAF-Metadaten!) |
 | `get_qea_diagrams` | Alle Diagramme mit Element-Zählung |
-| `get_naf_view_elements_from_qea` | NAF-2 bis NAF-7 Views |
+| `get_naf_view_elements_from_qea` | NAF Views |
 | `execute_qea_sql` | Read-only SQL für fortgeschrittene Analysen |
 | `get_qea_table_schema` | Tabellenschema-Inspektion |
 | `export_qea_element_report` | Komplettbericht für ein Element |
