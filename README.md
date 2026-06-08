@@ -1,4 +1,4 @@
-# 🦞 EAM QEA Analyzer — Open WebUI Tool
+# EAM QEA Analyzer — Open WebUI Tool
 
 > **Powered by AAroN** — [github.com/schmitze87/AAroN](https://github.com/schmitze87/AAroN) by [@schmitze87](https://github.com/schmitze87) (Markus Schmitz)
 >
@@ -130,7 +130,7 @@ eam-qea-tool/
 | Wer | Was |
 |-----|-----|
 | [@schmitze87](https://github.com/schmitze87) (Markus Schmitz) | **AAroN** — Die gesamte Wissensbasis. 15+ Java-Processors, die die proprietäre QEA-Tabellenstruktur von Sparx EA dokumentieren. |
-| **Clawdia 🦞** & Michael Estel | Analyse der AAroN-Processors, Extraktion des Tabellenwissens, Python-Portierung & Open WebUI Integration |
+|  Michael Estel | Analyse der AAroN-Processors, Extraktion des Tabellenwissens, Python-Portierung & Open WebUI Integration |
 
 > **Original-Repo:** [github.com/schmitze87/AAroN](https://github.com/schmitze87/AAroN) — ⭐ gebt Markus einen Star, er hat's verdient.
 
