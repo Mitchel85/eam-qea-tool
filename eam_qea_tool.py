@@ -11,7 +11,7 @@ Usage as Open WebUI Tool:
     Drop this file into Open WebUI's tools directory.
     The LLM can then call these functions to analyze QEA files.
 
-Author: Clawdia 🦞 — Built from AAroN source analysis
+Author: Michael Estel — Built from AAroN source analysis
 Date: 2026-06-06
 requirements: networkx, pandas
 """

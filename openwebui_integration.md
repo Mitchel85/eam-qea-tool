@@ -216,4 +216,4 @@ async def meine_spezialanalyse(self, qea_path: str, parameter: str) -> str:
 
 ---
 
-*Erstellt: 06.06.2026 | Clawdia 🦞 | Basierend auf AAroN v2026.01.4*
+*Erstellt: 06.06.2026 | Basierend auf AAroN v2026.01.4*
