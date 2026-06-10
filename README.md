@@ -34,7 +34,7 @@ Dieses Tool extrahiert das Wissen aus **AAroN** — einem Neo4j-Plugin, das für
 
 ## Features
 
-### 12 High-Level-Analysefunktionen
+### 15 High-Level-Analysefunktionen
 
 | Funktion | Beschreibung |
 |----------|-------------|
@@ -47,9 +47,26 @@ Dieses Tool extrahiert das Wissen aus **AAroN** — einem Neo4j-Plugin, das für
 | `find_elements_by_tagged_value` | Tagged-Value-Suche (NAF-Metadaten!) |
 | `get_qea_diagrams` | Alle Diagramme mit Element-Zählung |
 | `get_naf_view_elements_from_qea` | NAF Views |
+| `list_process_packages_and_activities` | Pakete & Activities für Prozessanalyse finden |
+| `list_extracted_activity_graphs` | Kompakte Prozessgraph-Übersicht (alle Activities) |
+| `get_activity_diagram_process_graph` | Detaillierter Prozessgraph einer Activity |
 | `execute_qea_sql` | Read-only SQL für fortgeschrittene Analysen |
 | `get_qea_table_schema` | Tabellenschema-Inspektion |
 | `export_qea_element_report` | Komplettbericht für ein Element |
+
+### Prozessanalyse (L4 — Diagramm-basiert)
+
+Neu ab v2.0: Extrahiert BPMN-artige Prozessgraphen direkt aus Activity-Diagrammen.
+
+| Schritt | Funktion |
+|---------|----------|
+| 1. Discovery | `list_process_packages_and_activities` — findet alle Pakete & Activities |
+| 2. Übersicht | `list_extracted_activity_graphs` — kompakte Liste aller Prozessgraphen |
+| 3. Detail | `get_activity_diagram_process_graph(activity_id=...)` — voller Graph mit Nodes & Edges |
+
+**Arbeitsweise:** Liest `t_diagram` + `t_diagramobjects` + `t_diagramlinks`, filtert gezielt ControlFlow/StateFlow/Transition-Kanten, erkennt Lanes, löst Gateways auf.
+
+**Abhängigkeiten:** `pandas`, `networkx` (werden beim Laden des Tools in Open WebUI automatisch installiert).
 
 ### NAF-Architektur-Support
 
@@ -95,7 +112,9 @@ volumes:
 "Analysiere /data/qea-models/mein_modell.qea"
 "Zeige alle NAF-3 Capabilities"
 "Detailanalyse für Element 12345"
-"Finde alle VS-NfD klassifizierten Elemente"
+"Zeige den Prozessgraph für Activity 12345"
+"Liste alle Prozessgraphen im Modell"
+"Welche L4-Activities gibt es?"
 ```
 
 ---
@@ -113,9 +132,10 @@ volumes:
 
 ```
 eam-qea-tool/
-├── eam_qea_tool.py          # Das Tool (52 KB)
+├── eam_qea_tool.py          # Das Tool (~95 KB)
 ├── system_prompt.md          # System Prompt für Open WebUI
 ├── openwebui_integration.md  # Ausführliche Einrichtungsanleitung
+├── requirements.txt          # pandas, networkx
 ├── LICENSE                   # Apache 2.0
 └── README.md                 # Diese Datei
 ```
