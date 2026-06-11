@@ -1038,6 +1038,22 @@ class QEAAnalyzer:
         ea_guid = element.get('ea_guid', '')
         object_id = element.get('Object_ID')
         
+        # CONTAINS: Package → Object (AAroN emits this for EVERY object via Package_ID)
+        package_id = element.get('Package_ID')
+        if package_id:
+            pkg = self._query(
+                "SELECT Package_ID, Name FROM t_package WHERE Package_ID = ?",
+                (package_id,)
+            )
+            if pkg:
+                implicit.append({
+                    "type": "CONTAINS",
+                    "direction": "incoming",
+                    "parent_name": pkg[0]['Name'],
+                    "parent_id": pkg[0]['Package_ID'],
+                    "source_column": "Package_ID"
+                })
+        
         # INSTANCE_OF: Object/Part/Port → PDATA1 as GUID (classifier)
         if object_type in ('Object', 'Part', 'Port'):
             pdata1 = element.get('PDATA1', '')
@@ -1053,9 +1069,10 @@ class QEAAnalyzer:
                     })
         
         # CLASSIFIER: Object/Action → Classifier_guid
+        # AAroN requires a valid EA GUID (isEaGuid) before creating the edge.
         if object_type in ('Object', 'Action'):
             cguid = element.get('Classifier_guid', '')
-            if cguid:
+            if cguid and self._is_guid(cguid):
                 ref = self._find_by_guid(cguid)
                 if ref:
                     implicit.append({
@@ -1092,7 +1109,12 @@ class QEAAnalyzer:
                         "source_column": "PDATA3"
                     })
         
-        # EMBEDS / HAS_PARENT / HAS_PORT / HAS_PART: ParentID → Object_ID
+        # HAS_PORT / HAS_PART / EMBEDS / HAS_PARENT: ParentID → Object_ID
+        # Matches AAroN ObjectProcessor exactly: within the parentId>0 block,
+        # HAS_PORT (Port only) and HAS_PART (Part only) are emitted IN ADDITION
+        # to EMBEDS and HAS_PARENT, which AAroN emits UNCONDITIONALLY for every
+        # parented object (not mutually exclusive). A Port therefore yields
+        # HAS_PORT + EMBEDS + HAS_PARENT.
         parent_id = element.get('ParentID')
         if parent_id and parent_id > 0:
             parent = self._query(
@@ -1102,35 +1124,58 @@ class QEAAnalyzer:
             )
             if parent:
                 p = parent[0]
+                # HAS_PORT — only for Ports (parent → port)
                 if object_type == 'Port':
                     implicit.append({
                         "type": "HAS_PORT",
+                        "direction": "incoming",
                         "parent_name": p['Name'],
                         "parent_id": p['Object_ID'],
                         "source_column": "ParentID"
                     })
+                # HAS_PART — only for Parts (parent → part)
                 elif object_type == 'Part':
                     implicit.append({
                         "type": "HAS_PART",
+                        "direction": "incoming",
                         "parent_name": p['Name'],
                         "parent_id": p['Object_ID'],
                         "source_column": "ParentID"
                     })
-                else:
-                    implicit.append({
-                        "type": "EMBEDS",
-                        "parent_name": p['Name'],
-                        "parent_id": p['Object_ID'],
-                        "source_column": "ParentID"
-                    })
+                # EMBEDS — ALWAYS for any parented object (parent → child)
+                implicit.append({
+                    "type": "EMBEDS",
+                    "direction": "incoming",
+                    "parent_name": p['Name'],
+                    "parent_id": p['Object_ID'],
+                    "source_column": "ParentID"
+                })
+                # HAS_PARENT — ALWAYS, inverse edge (child → parent)
+                implicit.append({
+                    "type": "HAS_PARENT",
+                    "direction": "outgoing",
+                    "parent_name": p['Name'],
+                    "parent_id": p['Object_ID'],
+                    "source_column": "ParentID"
+                })
         
         return implicit
     
     def _is_guid(self, val: str) -> bool:
-        """Check if a value looks like a Sparx EA GUID."""
+        """Check if a value is a valid Sparx EA GUID.
+
+        Mirrors AAroN's GUIDHelper.guidPattern exactly:
+        {8-4-4-4-12} hex digits. A loose pattern would create spurious
+        implicit relationships from malformed PDATA fields, so we keep
+        the strict form to stay faithful to AAroN.
+        """
         if not val:
             return False
-        return bool(re.match(r'^\{[0-9A-Fa-f-]+\}$', val))
+        return bool(re.match(
+            r'^\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-'
+            r'[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}$',
+            val
+        ))
     
     def _find_by_guid(self, guid: str) -> dict:
         """Find an element by its ea_guid."""
@@ -1197,6 +1242,11 @@ class QEAAnalyzer:
         
         return self._query(f"""
             SELECT c.Connector_ID, c.Name, c.Connector_Type, c.Stereotype,
+                   CASE
+                       WHEN c.Stereotype IS NOT NULL AND TRIM(c.Stereotype) != ''
+                       THEN c.Stereotype
+                       ELSE c.Connector_Type
+                   END as Effective_Type,
                    c.Direction, c.Notes, c.ea_guid,
                    c.Start_Object_ID, o1.Name as Source_Name,
                    o1.Object_Type as Source_Type, o1.Stereotype as Source_Stereotype,

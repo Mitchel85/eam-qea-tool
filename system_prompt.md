@@ -89,7 +89,7 @@ Die PDATA-Felder in t_object haben je nach `Object_Type` unterschiedliche Semant
 | Object_Type | PDATA1 | PDATA2 | PDATA3 | PDATA4 | PDATA5 |
 |-------------|--------|--------|--------|--------|--------|
 | Package (als Object) | Package_ID | — | — | — | — |
-| Object/Part/Port | Classifier-GUID (INSTANCE_OF) | — | Reused-Element-GUID (REUSAGE) | — | — |
+| Object/Part/Port | Typ-GUID (INSTANCE_OF) | — | Reused-Element-GUID (REUSAGE, nur Part/Port) | — | — |
 | Action | Behaviour-GUID | — | — | — | — |
 | Allgemein | Kontextabhängig | — | — | — | — |
 
