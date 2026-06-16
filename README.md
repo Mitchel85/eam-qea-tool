@@ -1,4 +1,4 @@
-# EAM QEA Analyzer — Open WebUI Tool
+# EAM QEA Analyzer — Open WebUI Tool (Experimental)
 
 > **Powered by AAroN** — [github.com/schmitze87/AAroN](https://github.com/schmitze87/AAroN) by [@schmitze87](https://github.com/schmitze87) (Markus Schmitz)
 >
