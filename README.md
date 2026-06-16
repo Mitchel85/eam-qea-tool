@@ -1,5 +1,29 @@
 # EAM QEA Analyzer — Open WebUI Tool (Experimental)
 
+> **Sprich mit deinem Architekturmodell wie mit einem Kollegen.**
+>
+> Lade eine `.qea`-Datei aus Sparx Enterprise Architect hoch und stelle Fragen in natürlicher Sprache —
+> das Tool übersetzt sie in präzise Datenbankabfragen, löst implizite Beziehungen auf und liefert
+> strukturierte Antworten. Kein SQL, kein Tabellen-Handbuch, kein Raten.
+
+---
+
+## 🎯 Wofür ist das?
+
+| Du willst … | Du sagst … |
+|---|---|
+| Alle Capabilities in NAF-3 sehen | *„Zeig mir alle NAF-3 Capabilities"* |
+| Ein Element im Detail verstehen | *„Detailanalyse für den OperationalNode 'FüTrp XYZ'"* |
+| Beziehungen nachvollziehen | *„Welche Systeme sind mit dem Logistik-Service verbunden?"* |
+| Prozesse analysieren | *„Extrahiere den Prozessgraphen aus dem Activity-Diagramm 'Einsatzvorbereitung'"* |
+| Metadaten auswerten | *„Finde alle Elemente mit TaggedValue Sicherheitseinstufung=VS-NfD"* |
+| Statistik & Überblick | *„Gib mir eine Statistik über alle Elementtypen im Modell"* |
+
+Das Tool ist ein **KI-gestützter Assistent für Enterprise-Architekten**, der das proprietäre Sparx-QEA-Format
+in eine natürlichsprachliche Schnittstelle übersetzt. Es kombiniert 15 Analysefunktionen mit dem
+gesamten Tabellenwissen aus AAroN — einem Neo4j-Plugin, das die undokumentierte QEA-Struktur
+vollständig versteht.
+
 > **Powered by AAroN (ArAMIS)** — [github.com/schmitze87/AAroN](https://github.com/schmitze87/AAroN) by [@schmitze87](https://github.com/schmitze87) (Markus Schmitz)
 >
 > Das gesamte Tabellenwissen in diesem Tool stammt aus AAroNs Java-Processors. Ohne AAroN gäbe es dieses Projekt nicht. 🙏
