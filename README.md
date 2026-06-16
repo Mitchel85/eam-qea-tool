@@ -58,7 +58,7 @@ Dieses Tool extrahiert das Wissen aus **AAroN** — einem Neo4j-Plugin, das für
 
 ## Features
 
-### 15 High-Level-Analysefunktionen
+### High-Level-Analysefunktionen
 
 | Funktion | Beschreibung |
 |----------|-------------|
@@ -74,6 +74,7 @@ Dieses Tool extrahiert das Wissen aus **AAroN** — einem Neo4j-Plugin, das für
 | `list_process_packages_and_activities` | Pakete & Activities für Prozessanalyse finden |
 | `list_extracted_activity_graphs` | Kompakte Prozessgraph-Übersicht (alle Activities) |
 | `get_activity_diagram_process_graph` | Detaillierter Prozessgraph einer Activity |
+| `list_available_qea_files` | Alle verfügbaren QEA-Dateien auflisten |
 | `execute_qea_sql` | Read-only SQL für fortgeschrittene Analysen |
 | `get_qea_table_schema` | Tabellenschema-Inspektion |
 | `export_qea_element_report` | Komplettbericht für ein Element |

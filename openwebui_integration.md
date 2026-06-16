@@ -7,7 +7,7 @@
 
 ## Übersicht
 
-Dieses Paket macht deinen Open WebUI EAM Analysten **zielgenau** — statt SQLite-Statements zu brute-forcen, nutzt es das tiefe Wissen von AAroN über die proprietäre QEA-Tabellenstruktur von Sparx Enterprise Architect.
+Dieses Paket macht deinen Open WebUI EAM Analysten **zielgenau** — statt ohne Domänenwissen SQLite-Queries auf die QEA-Datenbank anzuwenden, nutzt es das tiefe Wissen von AAroN über die proprietäre QEA-Tabellenstruktur von Sparx Enterprise Architect.
 
 ### Warum ist das besser als euer aktueller Ansatz?
 
@@ -20,7 +20,7 @@ Dieses Paket macht deinen Open WebUI EAM Analysten **zielgenau** — statt SQLit
 | Keine NAF-Struktur-Erkennung | NAF-Views & Stereotypen automatisch erkannt |
 | Findet Tagged Values nur zufällig | Tagged Values als First-Class-Citizen |
 
-### Was AAroN uns gelehrt hat (Lessons Learned)
+### AAroN: Erkenntnisse zur QEA-Struktur
 
 1. **PDATA-Spalten sind der Schlüssel:** AAroNs ObjectProcessor zeigt, dass PDATA1-PDATA5 kontextabhängige GUID-Verweise enthalten — das ist das Geheimnis für INSTANCE_OF, BEHAVIOUR und REUSAGE Beziehungen
 2. **Implizite Beziehungen existieren außerhalb von t_connector:** EMBEDS, HAS_PORT, HAS_PART werden aus ParentID + Object_Type abgeleitet
