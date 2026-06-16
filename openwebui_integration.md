@@ -34,23 +34,26 @@ Dieses Paket macht dein Open WebUI-Modell für QEA-Analysen **zielgenau** — st
 
 ### 1. Tool in Open WebUI einbinden
 
-**Option A: Als Python-Tool (empfohlen für Open WebUI ≥ 0.3)**
-
-Kopiere `eam_qea_tool.py` in das Open WebUI Tools-Verzeichnis:
+**Option A: Direktdownload (mit Internet)**
 
 ```bash
-# Pfad je nach Open WebUI Installation
-cp eam_qea_tool.py /pfad/zu/open-webui/data/tools/
-# oder bei Docker:
-docker cp eam_qea_tool.py open-webui:/app/backend/data/tools/
+# Auf dem Open WebUI Server:
+cd /pfad/zu/open-webui/data/tools/
+wget https://raw.githubusercontent.com/Mitchel85/eam-qea-tool/main/eam_qea_tool.py
 ```
+
+**Ohne Internet:** Die Datei `eam_qea_tool.py` vom GitHub-Release herunterladen und per USB/Netzlaufwerk in das Tools-Verzeichnis kopieren.
+
+**Option B: Manuelle Kopie (wenn Tool-Datei bereits lokal liegt)**
 
 Dann in Open WebUI:
 1. **Admin Panel → Tools** öffnen
 2. Tool `eam_qea_tool` sollte automatisch erscheinen
 3. **Aktivieren** und dem gewünschten Modell zuweisen (z. B. einem neu erstellten „QEA Analyzer")
 
-**Option B: Direktintegration (falls kein Tool-Support)**
+⚠️ Falls das Tool NICHT erscheint: Open WebUI einmal neustarten (`docker restart open-webui`).
+
+**Option C: Direktintegration (falls kein Tool-Support)**
 
 Alternativ kann das Skript als Modul importiert werden:
 
@@ -71,16 +74,35 @@ stats = analyzer.get_model_statistics()
 
 ### 3. QEA-Datei-Zugriff sicherstellen
 
-Das Tool braucht Lese-Zugriff auf die QEA-Dateien:
+Das Tool braucht einen **Dateipfad** zur QEA-Datei. Drei Wege:
 
-```bash
-# Wenn QEA-Dateien auf einem Netzlaufwerk liegen:
-# In Open WebUI docker-compose.yml das Volume mounten:
-volumes:
-  - /pfad/zu/qea-modellen:/data/qea-models:ro
+| Weg | Vorgehen | Pfad-Beispiel |
+|-----|----------|--------------|
+| **A: Volume-Mount** | QEA-Ordner in docker-compose.yml mounten | `/data/models/architektur.qea` |
+| **B: Container-Kopie** | `docker cp modell.qea open-webui:/app/backend/data/models/` | `/app/backend/data/models/modell.qea` |
+| **C: Netzlaufwerk** | QEA-Ordner per NFS/SMB mounten, dann in Container durchreichen | `/mnt/qea/modell.qea` |
+
+Dann sind die Dateien unter dem jeweiligen Pfad erreichbar.
+
+---
+
+## Was passiert technisch?
+
 ```
-
-Dann sind die Dateien unter `/data/qea-models/mein_modell.qea` erreichbar.
+Nutzer: "Welche Capabilities hat das Modell?"
+   ↓
+Open WebUI schickt Prompt + System Prompt an LLM
+   ↓
+LLM (dank System Prompt): "Ah, Capabilities = Stereotype-Filter auf t_object"
+   ↓
+LLM ruft Tool auf: find_elements_in_qea(stereotype="Capability")
+   ↓
+Tool öffnet QEA per SQLite, führt AAroN-informierte Query aus
+   ↓
+Ergebnis (JSON) → LLM formuliert Antwort in natürlicher Sprache
+   ↓
+Nutzer sieht: "3 Capabilities gefunden: Führungsfähigkeit, ..."
+```
 
 ---
 
@@ -213,6 +235,18 @@ async def meine_spezialanalyse(self, qea_path: str, parameter: str) -> str:
 | AttributeProcessor | t_attribute | get_element_detail_from_qea (attributes) |
 | OperationProcessor | t_operation | get_element_detail_from_qea (operations) |
 | XRefProcessor | t_xref | get_element_detail_from_qea (cross_references) |
+
+---
+
+## Kurzfassung
+
+```
+1. eam_qea_tool.py → data/tools/
+2. Admin → Tools → aktivieren
+3. System Prompt aus system_prompt.md → ins Modell kopieren
+4. QEA-Datei in Container bringen
+5. "Analysiere /pfad/zur/datei.qea" eintippen
+```
 
 ---
 
