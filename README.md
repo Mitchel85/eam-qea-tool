@@ -1,28 +1,28 @@
 # EAM QEA Analyzer — Open WebUI Tool (Experimental)
 
-> **Sprich mit deinem Architekturmodell wie mit einem Kollegen.**
+> **Stelle natürlichsprachliche Abfragen an dein Sparx-EA-Modell.**
 >
-> Lade eine `.qea`-Datei aus Sparx Enterprise Architect hoch und stelle Fragen in natürlicher Sprache —
-> das Tool übersetzt sie in präzise Datenbankabfragen, löst implizite Beziehungen auf und liefert
-> strukturierte Antworten. Kein SQL, kein Tabellen-Handbuch, kein Raten.
+> `.qea`-Datei in Open WebUI laden, Frage stellen, strukturierte Antwort erhalten.
+> Das Tool übersetzt natürliche Sprache in präzise Datenbankabfragen, löst implizite Beziehungen auf
+> und liefert vollständige Ergebnisse — ohne SQL-Kenntnisse oder Handbuch-Studium.
 
 ---
 
-## 🎯 Wofür ist das?
+## 🎯 Funktionsübersicht
 
-| Du willst … | Du sagst … |
+| Analyseziel | Beispielabfrage |
 |---|---|
-| Alle Capabilities in NAF-3 sehen | *„Zeig mir alle Capabilities"* |
-| Ein Element im Detail verstehen | *„Detailanalyse für den OperationalNode 'FüTrp XYZ'"* |
-| Beziehungen nachvollziehen | *„Welche Systeme sind mit dem Logistik-Service verbunden?"* |
-| Prozesse analysieren | *„Extrahiere den Prozessgraphen aus dem Activity-Diagramm 'Einsatzvorbereitung'"* |
-| Metadaten auswerten | *„Finde alle Elemente mit TaggedValue Sicherheitseinstufung=VS-NfD"* |
-| Statistik & Überblick | *„Gib mir eine Statistik über alle Elementtypen im Modell"* |
+| Capabilities in NAF-3 anzeigen | *„Zeig mir alle Capabilities"* |
+| Element im Detail analysieren | *„Detailanalyse für den OperationalNode 'FüTrp XYZ'"* |
+| Beziehungen auswerten | *„Welche Systeme sind mit dem Logistik-Service verbunden?"* |
+| Prozesse extrahieren | *„Extrahiere den Prozessgraph aus dem Activity-Diagramm 'Einsatzvorbereitung'"* |
+| Metadaten abfragen | *„Finde alle Elemente mit TaggedValue Sicherheitseinstufung=VS-NfD"* |
+| Modellstatistik | *„Gib mir eine Statistik über alle Elementtypen im Modell"* |
 
-Das Tool ist ein **KI-gestützter Assistent für Enterprise-Architekten**, der das proprietäre Sparx-QEA-Format
-in eine natürlichsprachliche Schnittstelle übersetzt. Es kombiniert 15 Analysefunktionen mit dem
-gesamten Tabellenwissen aus AAroN — einem Neo4j-Plugin, das die undokumentierte QEA-Struktur
-vollständig versteht.
+Der **EAM QEA Analyzer** ist ein KI-gestützter Assistent für Enterprise-Architekten,
+der das proprietäre Sparx-QEA-Format über eine natürlichsprachliche Schnittstelle
+zugänglich macht. Das zugrundeliegende Tabellenwissen stammt aus **AAroN** —
+einem Neo4j-Plugin, das die undokumentierte QEA-Struktur vollständig abbildet.
 
 > **Powered by AAroN (ArAMIS)** — [github.com/schmitze87/AAroN](https://github.com/schmitze87/AAroN) by [@schmitze87](https://github.com/schmitze87) (Markus Schmitz)
 >
@@ -38,15 +38,15 @@ Sparx Enterprise Architect speichert Modelle in proprietären `.qea`-Dateien (SQ
 - **Implizite Beziehungen**, die NICHT in `t_connector` stehen, sondern aus Spalten wie `ParentID`, `Package_ID` und `PDATA1-3` abgeleitet werden
 - **`t_xref`-Einträge**, die Stereotyp-Auflösungen und Conveyed Items enthalten
 
-Ein LLM, das einfach SQLite-Queries brute-forced, findet diese Zusammenhänge nicht.
+Ein LLM, das ohne Domänenwissen SQLite-Queries auf die QEA-Datenbank anwendet, findet diese Zusammenhänge nicht.
 
 ## Die Lösung
 
 Dieses Tool extrahiert das Wissen aus **AAroN** — einem Neo4j-Plugin, das für NAF-Architekturen entwickelt wurde und die proprietäre QEA-Struktur vollständig versteht. AAroNs 15+ Java-Processors wurden analysiert und in eine Python-Toolbox für Open WebUI übersetzt.
 
-### Was AAroN uns gelehrt hat
+### AAroN: Erkenntnisse zur QEA-Struktur
 
-| Lesson Learned | Auswirkung |
+| Erkenntnis | Auswirkung |
 |----------------|------------|
 | **PDATA1-5** sind kontextabhängige GUID-Verweise | `INSTANCE_OF`, `BEHAVIOUR`, `REUSAGE` Beziehungen werden erkannt |
 | **9 implizite Beziehungstypen** existieren außerhalb von `t_connector` | `CONTAINS`, `EMBEDS`, `HAS_PORT`, `HAS_PART` etc. |
@@ -130,7 +130,7 @@ volumes:
   - /pfad/zu/qea-modellen:/data/qea-models:ro
 ```
 
-### 5. Loslegen
+### 5. Erste Abfragen
 
 ```
 "Analysiere /data/qea-models/mein_modell.qea"
@@ -175,7 +175,7 @@ eam-qea-tool/
 | [@schmitze87](https://github.com/schmitze87) (Markus Schmitz) | **AAroN** — Die gesamte Wissensbasis. 15+ Java-Processors, die die proprietäre QEA-Tabellenstruktur von Sparx EA dokumentieren. |
 |  Michael Estel (mit KI-Agent) | Analyse der AAroN-Processors, Extraktion des Tabellenwissens, Python-Portierung & Open WebUI Integration |
 
-> **Original-Repo:** [github.com/schmitze87/AAroN](https://github.com/schmitze87/AAroN) — ⭐ gebt Markus einen Star, er hat's verdient.
+> **Original-Repo:** [github.com/schmitze87/AAroN](https://github.com/schmitze87/AAroN) — ⭐ Empfehlung: gebt Markus einen Star für seine Arbeit an AAroN.
 
 ## Lizenz
 
