@@ -12,7 +12,7 @@
 
 | Du willst … | Du sagst … |
 |---|---|
-| Alle Capabilities in NAF-3 sehen | *„Zeig mir alle NAF-3 Capabilities"* |
+| Alle Capabilities in NAF-3 sehen | *„Zeig mir alle Capabilities"* |
 | Ein Element im Detail verstehen | *„Detailanalyse für den OperationalNode 'FüTrp XYZ'"* |
 | Beziehungen nachvollziehen | *„Welche Systeme sind mit dem Logistik-Service verbunden?"* |
 | Prozesse analysieren | *„Extrahiere den Prozessgraphen aus dem Activity-Diagramm 'Einsatzvorbereitung'"* |
