@@ -31,12 +31,12 @@ wget https://raw.githubusercontent.com/Mitchel85/eam-qea-tool/main/eam_qea_tool.
 
 ## Schritt 3: System Prompt einbauen
 
-1. **Workspace** → **Models** → deinen EAM-Analysten auswählen (oder neuen erstellen)
+1. **Workspace** → **Models** → gewünschtes Modell auswählen (oder neues erstellen, z. B. „QEA Analyzer")
 2. **System Prompt**-Feld öffnen
 3. Inhalt von **[system_prompt.md](https://raw.githubusercontent.com/Mitchel85/eam-qea-tool/main/system_prompt.md)** reinkopieren
 4. **Speichern**
 
-> Optional: Du kannst den Prompt auch mit deinem bestehenden EAM-Analyst-Prompt kombinieren — einfach untendrunter anfügen.
+> Optional: Du kannst den Prompt auch mit einem bestehenden Architektur-Prompt kombinieren — einfach untendrunter anfügen.
 
 ---
 

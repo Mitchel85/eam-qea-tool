@@ -108,11 +108,11 @@ cp eam_qea_tool.py /pfad/zu/open-webui/data/tools/
 
 1. **Admin Panel → Tools** öffnen
 2. `eam_qea_tool` erscheint automatisch
-3. **Aktivieren** und dem EAM Analyst Model zuweisen
+3. **Aktivieren** und dem gewünschten Modell zuweisen
 
 ### 3. System Prompt setzen
 
-Den Inhalt von [`system_prompt.md`](system_prompt.md) in das System-Feld des EAM Analysten einfügen.
+Den Inhalt von [`system_prompt.md`](system_prompt.md) in das System-Feld des Modells einfügen.
 
 ### 4. QEA-Dateien verfügbar machen
 

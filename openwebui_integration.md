@@ -7,7 +7,7 @@
 
 ## Übersicht
 
-Dieses Paket macht deinen Open WebUI EAM Analysten **zielgenau** — statt ohne Domänenwissen SQLite-Queries auf die QEA-Datenbank anzuwenden, nutzt es das tiefe Wissen von AAroN über die proprietäre QEA-Tabellenstruktur von Sparx Enterprise Architect.
+Dieses Paket macht dein Open WebUI-Modell für QEA-Analysen **zielgenau** — statt ohne Domänenwissen SQLite-Queries auf die QEA-Datenbank anzuwenden, nutzt es das tiefe Wissen von AAroN über die proprietäre QEA-Tabellenstruktur von Sparx Enterprise Architect.
 
 ### Warum ist das besser als euer aktueller Ansatz?
 
@@ -48,7 +48,7 @@ docker cp eam_qea_tool.py open-webui:/app/backend/data/tools/
 Dann in Open WebUI:
 1. **Admin Panel → Tools** öffnen
 2. Tool `eam_qea_tool` sollte automatisch erscheinen
-3. **Aktivieren** und dem EAM Analyst Model zuweisen
+3. **Aktivieren** und dem gewünschten Modell zuweisen (z. B. einem neu erstellten „QEA Analyzer")
 
 **Option B: Direktintegration (falls kein Tool-Support)**
 
@@ -65,9 +65,9 @@ stats = analyzer.get_model_statistics()
 
 ### 2. System Prompt konfigurieren
 
-1. In Open WebUI: **Workspace → Models → EAM Analyst → Edit**
+1. In Open WebUI: **Workspace → Models** → gewünschtes Modell auswählen (oder neues erstellen, z. B. „QEA Analyzer") → **Edit**
 2. Den Inhalt von `system_prompt.md` in das System-Feld einfügen
-3. **Optional:** Den bestehenden Prompt des EAM Analysten mit diesem Prompt **verschmelzen** (unten anfügen)
+3. **Optional:** Falls bereits ein Architektur-Prompt existiert, diesen Prompt **unten anfügen** (Prompts verschmelzen)
 
 ### 3. QEA-Datei-Zugriff sicherstellen
 
