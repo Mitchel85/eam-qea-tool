@@ -12,7 +12,7 @@
 
 | Analyseziel | Beispielabfrage |
 |---|---|
-| Capabilities in NAF-3 anzeigen | *„Zeig mir alle Capabilities"* |
+| Capabilities anzeigen | *„Zeig mir alle Capabilities"* |
 | Element im Detail analysieren | *„Detailanalyse für den OperationalNode 'FüTrp XYZ'"* |
 | Beziehungen auswerten | *„Welche Systeme sind mit dem Logistik-Service verbunden?"* |
 | Prozesse extrahieren | *„Extrahiere den Prozessgraph aus dem Activity-Diagramm 'Einsatzvorbereitung'"* |
