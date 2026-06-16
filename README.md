@@ -8,7 +8,7 @@
 
 ---
 
-## 🎯 Funktionsübersicht
+## Funktionsübersicht
 
 | Analyseziel | Beispielabfrage |
 |---|---|
