@@ -92,15 +92,6 @@ Neu ab v2.0: Extrahiert BPMN-artige Prozessgraphen direkt aus Activity-Diagramme
 
 **Abhängigkeiten:** `pandas`, `networkx` (werden beim Laden des Tools in Open WebUI automatisch installiert).
 
-### NAF-Architektur-Support
-
-- **NAF-2:** Operational Connectivity (OpNode, Needline, InformationExchange)
-- **NAF-3:** Capabilities (Capability, CapabilityConfiguration)
-- **NAF-4:** Organizational (OrganizationalResource, OrganizationRole)
-- **NAF-5:** Functional (Function, Activity, OperationalActivity)
-- **NAF-6:** System (SystemResource, ResourceInteraction)
-- **NAF-7:** Technical Standards (Protocol, Standard, TechnicalStandard)
-
 ---
 
 ## Schnellstart
@@ -129,26 +120,6 @@ Den Inhalt von [`system_prompt.md`](system_prompt.md) in das System-Feld des EAM
 volumes:
   - /pfad/zu/qea-modellen:/data/qea-models:ro
 ```
-
-### 5. Erste Abfragen
-
-```
-"Analysiere /data/qea-models/mein_modell.qea"
-"Zeige alle NAF-3 Capabilities"
-"Detailanalyse für Element 12345"
-"Zeige den Prozessgraph für Activity 12345"
-"Liste alle Prozessgraphen im Modell"
-"Welche L4-Activities gibt es?"
-```
-
----
-
-## Sicherheit (Bw-tauglich)
-
-- **Read-only:** Keine Schreibzugriffe auf QEA-Dateien
-- **Lokal:** Alle Analysen laufen im Open WebUI Python-Prozess
-- **Keine Exfiltration:** Keine externen API-Calls
-- **On-Premise:** Funktioniert vollständig ohne Internetzugang
 
 ---
 
