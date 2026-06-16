@@ -1,6 +1,6 @@
 # EAM QEA Analyzer — Open WebUI Tool (Experimental)
 
-> **Stelle natürlichsprachliche Abfragen an dein Sparx-EA-Modell.**
+> **Stelle natürlichsprachliche Abfragen an ein Sparx-EA-Modell.**
 >
 > `.qea`-Datei in Open WebUI laden, Frage stellen, strukturierte Antwort erhalten.
 > Das Tool übersetzt natürliche Sprache in präzise Datenbankabfragen, löst implizite Beziehungen auf
