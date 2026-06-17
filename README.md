@@ -93,6 +93,21 @@ Neu ab v2.0: Extrahiert BPMN-artige Prozessgraphen direkt aus Activity-Diagramme
 
 **Abhängigkeiten:** `pandas`, `networkx` (werden beim Laden des Tools in Open WebUI automatisch installiert).
 
+### ADMBw-NAFv4-Topologie-Validierung (optional)
+
+Für Architekten, die im Bw-Umfeld mit NAFv4-Modellen arbeiten, kann der QEA-Analyzer extrahierte Beziehungen automatisch gegen die ADMBw-Topologieregeln validieren. Dazu werden die vier Knowledge-Dateien aus dem [ADMBw-Extraktor](https://github.com/Mitchel85/admbw-extractor) zusätzlich in die Open WebUI Knowledge-Base geladen:
+
+| Datei | Zweck |
+|-------|-------|
+| `ADMBw-Knowledge-Topology.md` | Source→Connector→Target (117 Regeln) |
+| `ADMBw-Knowledge-Connectors.md` | EA-Metatyp → ADMBw-Stereotyp |
+| `ADMBw-Knowledge-Viewpoints.md` | Elemente pro Viewpoint |
+| `ADMBw-Knowledge-Stereotypes.md` | 317 Stereotype + AppliesTo |
+
+> 🔗 **Repository:** [Mitchel85/admbw-extractor](https://github.com/Mitchel85/admbw-extractor)
+
+Ohne diese Dateien arbeitet der QEA-Analyzer als reiner QEA-Parser. Mit ihnen wird er zum NAF-Architektur-Assistenten, der nicht nur Beziehungen zählt, sondern fachlich interpretiert („X ist ein Enabler für Y im Viewpoint C3 — vermutlich fehlt noch ein CapabilityForTask").
+
 ---
 
 ## Schnellstart
