@@ -6,14 +6,14 @@ import requests
 from eam_qea_tool import Tools as QEATools
 
 
-# Config (no CLI args)
-BASE_URL = "http://localhost:3000"
-TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImIyYjkyMzQ1LWFlYWEtNDdhZS04MWRlLWE3ZWIyMmJiMmNjNCIsImV4cCI6MTc4MzMyNzI2OCwianRpIjoiZWJmMzE5NTgtM2Q4My00OGJiLWFhYjctMzdkN2UzM2YyOTk3IiwiaWF0IjoxNzgwOTA4MDY4fQ.rWCo-vhg3RR_f7elDzzKjt2AED0Pxq_pFWa_nfhnoyQ"
-MODEL = "test"
-QEA_PATH = "./250826-OpArch_P309.qea"
+# Config
+BASE_URL = "" # URL of the OpenWebUI instance, e.g. "http://localhost:3000"
+TOKEN = "" # Your OpenWebUI API token
+MODEL = "" # Model name (can check using get_model_list() function)
+QEA_PATH = "" # Path to your QEA file for local tool calls
 SYSTEM_PROMPT = "You can call local QEA tools when needed."
 MAX_TOOL_ROUNDS = 8
-RAG_FILES = ["Untitledtest.txt"]
+RAG_FILES = [""] # Name of files to use for RAG
 FILES_MAX_PAGES = 5
 
 
