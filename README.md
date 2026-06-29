@@ -1,10 +1,26 @@
-# EAM QEA Analyzer — Open WebUI Tool (Experimental)
+# EAM QEA Analyzer v0.3
 
-> **Stelle natürlichsprachliche Abfragen an ein Sparx-EA-Modell.**
+> **Stelle natürlichsprachliche Abfragen an ein Sparx-EA-Modell — lokal oder in Open WebUI.**
 >
-> `.qea`-Datei in Open WebUI laden, Frage stellen, strukturierte Antwort erhalten.
+> `.qea`-Datei laden, Frage stellen, strukturierte Antwort erhalten.
 > Das Tool übersetzt natürliche Sprache in präzise Datenbankabfragen, löst implizite Beziehungen auf
 > und liefert vollständige Ergebnisse — ohne SQL-Kenntnisse oder Handbuch-Studium.
+
+---
+
+## 🚀 Zwei Betriebsmodi
+
+| Modus | Beschreibung | Wann? |
+|-------|-------------|-------|
+| **🔌 Open-WebUI Tool** (nativ) | Läuft direkt als Tool IN Open-WebUI. Kein API-Token nötig. | Wenn Open-WebUI auf dem gleichen Server läuft. Einfachste Einrichtung. |
+| **🖥️ Lokaler Wrapper** (neu v0.3) | Läuft auf deinem Rechner, ruft Open-WebUI nur als LLM-API auf. | Wenn du lokal entwickelst, PyCharm nutzt, oder Open-WebUI entfernt läuft. |
+
+**Beide Modi nutzen dieselbe `eam_qea_tool.py`** — du entscheidest, wie du sie einbettest.
+
+| Quickstart-Guide | Datei |
+|---|---|
+| Open-WebUI (nativ) | [`openwebui_integration.md`](openwebui_integration.md) |
+| Lokaler Wrapper | [`local_wrapper.md`](local_wrapper.md) |
 
 ---
 
@@ -28,7 +44,6 @@ einem Neo4j-Plugin, das die undokumentierte QEA-Struktur vollständig abbildet.
 >
 > Das gesamte Tabellenwissen in diesem Tool stammt aus AAroNs Java-Processors. Ohne AAroN gäbe es dieses Projekt nicht. 🙏
 
-
 ---
 
 ## Das Problem
@@ -42,7 +57,7 @@ Ein LLM, das ohne Domänenwissen SQLite-Queries auf die QEA-Datenbank anwendet, 
 
 ## Die Lösung
 
-Dieses Tool extrahiert das Wissen aus **AAroN** — einem Neo4j-Plugin, das für NAF-Architekturen entwickelt wurde und die proprietäre QEA-Struktur vollständig versteht. AAroNs 15+ Java-Processors wurden analysiert und in eine Python-Toolbox für Open WebUI übersetzt.
+Dieses Tool extrahiert das Wissen aus **AAroN** — einem Neo4j-Plugin, das für NAF-Architekturen entwickelt wurde und die proprietäre QEA-Struktur vollständig versteht. AAroNs 15+ Java-Processors wurden analysiert und in eine Python-Toolbox übersetzt.
 
 ### AAroN: Erkenntnisse zur QEA-Struktur
 
@@ -81,7 +96,7 @@ Dieses Tool extrahiert das Wissen aus **AAroN** — einem Neo4j-Plugin, das für
 
 ### Prozessanalyse (L4 — Diagramm-basiert)
 
-Neu ab v2.0: Extrahiert BPMN-artige Prozessgraphen direkt aus Activity-Diagrammen.
+Extrahiert BPMN-artige Prozessgraphen direkt aus Activity-Diagrammen.
 
 | Schritt | Funktion |
 |---------|----------|
@@ -110,46 +125,29 @@ Ohne diese Dateien arbeitet der QEA-Analyzer als reiner QEA-Parser. Mit ihnen wi
 
 ---
 
-## Schnellstart
-
-### 1. Tool in Open WebUI einbinden
-
-```bash
-# Tool kopieren
-cp eam_qea_tool.py /pfad/zu/open-webui/data/tools/
-```
-
-### 2. In Open WebUI aktivieren
-
-1. **Admin Panel → Tools** öffnen
-2. `eam_qea_tool` erscheint automatisch
-3. **Aktivieren** und dem gewünschten Modell zuweisen
-
-### 3. System Prompt setzen
-
-Den Inhalt von [`system_prompt.md`](system_prompt.md) in das System-Feld des Modells einfügen.
-
-### 4. QEA-Dateien verfügbar machen
-
-```yaml
-# In Open WebUI docker-compose.yml:
-volumes:
-  - /pfad/zu/qea-modellen:/data/qea-models:ro
-```
-
----
-
 ## Struktur
 
 ```
 eam-qea-tool/
-├── eam_qea_tool.py          # Das Tool (~95 KB)
-├── system_prompt.md          # System Prompt für Open WebUI
-├── openwebui_integration.md  # Ausführliche Einrichtungsanleitung
-├── requirements.txt          # pandas, networkx
-├── LICENSE                   # Apache 2.0
-└── README.md                 # Diese Datei
+├── eam_qea_tool.py              # Gemeinsame Codebasis (~95 KB)
+├── webui_api.py                 # Lokaler Wrapper (NEU v0.3)
+├── system_prompt.md             # System Prompt für beide Modi
+├── openwebui_integration.md     # Anleitung: nativer Open-WebUI-Modus
+├── local_wrapper.md             # Anleitung: lokaler API-Wrapper-Modus
+├── Demo-Output/                 # Beispiel-Ausgaben
+├── LICENSE                      # Apache 2.0
+└── README.md                    # Diese Datei
 ```
+
+---
+
+## Changelog
+
+| Version | Datum | Änderung |
+|---------|-------|----------|
+| **v0.3** | 29.06.2026 | Lokaler Wrapper-Modus (`webui_api.py`) von [@fkraemer-coder](https://github.com/fkraemer-coder) |
+| v0.2 | 10.06.2026 | L4-Prozessextraktion aus Activity-Diagrammen |
+| v0.1 | 08.06.2026 | Initial Release: QEA-Analyse, NAF-Validierung |
 
 ---
 
@@ -160,14 +158,15 @@ eam-qea-tool/
 | Wer | Was |
 |-----|-----|
 | [@schmitze87](https://github.com/schmitze87) (Markus Schmitz) | **AAroN** — Die gesamte Wissensbasis. 15+ Java-Processors, die die proprietäre QEA-Tabellenstruktur von Sparx EA dokumentieren. |
+| [@fkraemer-coder](https://github.com/fkraemer-coder) | **Lokaler Wrapper** — webui_api.py, entkoppelt das Tool von Open-WebUI. |
 |  Michael Estel (mit KI-Agent) | Analyse der AAroN-Processors, Extraktion des Tabellenwissens, Python-Portierung & Open WebUI Integration |
 
 > **Original-Repo:** [github.com/schmitze87/AAroN](https://github.com/schmitze87/AAroN) — ⭐ Empfehlung: gebt Markus einen Star für seine Arbeit an AAroN.
 
 ## Lizenz
 
-Apache License 2.0 
+Apache License 2.0
 
 ---
 
-*Für die ausführliche Einrichtungsanleitung siehe [openwebui_integration.md](openwebui_integration.md)*
+*Open-WebUI (nativ): [openwebui_integration.md](openwebui_integration.md) | Lokaler Wrapper: [local_wrapper.md](local_wrapper.md)*
