@@ -1,6 +1,6 @@
-# EAM QEA Analyzer v0.3
+# EAM QEA Analyzer v0.4
 
-> **Stelle natürlichsprachliche Abfragen an ein Sparx-EA-Modell — lokal oder in Open WebUI.**
+> **Stelle natürlichsprachliche Abfragen an ein Sparx-EA-Modell — lokal, in Open WebUI oder per MCP.**
 >
 > `.qea`-Datei laden, Frage stellen, strukturierte Antwort erhalten.
 > Das Tool übersetzt natürliche Sprache in präzise Datenbankabfragen, löst implizite Beziehungen auf
@@ -8,19 +8,21 @@
 
 ---
 
-## 🚀 Zwei Betriebsmodi
+## 🚀 Drei Betriebsmodi
 
 | Modus | Beschreibung | Wann? |
 |-------|-------------|-------|
 | **🔌 Open-WebUI Tool** (nativ) | Läuft direkt als Tool IN Open-WebUI. Kein API-Token nötig. | Wenn Open-WebUI auf dem gleichen Server läuft. Einfachste Einrichtung. |
-| **🖥️ Lokaler Wrapper** (neu v0.3) | Läuft auf deinem Rechner, ruft Open-WebUI nur als LLM-API auf. | Wenn du lokal entwickelst, PyCharm nutzt, oder Open-WebUI entfernt läuft. |
+| **🖥️ Lokaler Wrapper** | Läuft auf deinem Rechner, ruft Open-WebUI nur als LLM-API auf. | Wenn du lokal entwickelst, PyCharm nutzt, oder Open-WebUI entfernt läuft. |
+| **🔗 MCP-Server** (neu v0.4) | Standard-Protokoll. Nutzbar aus Open-WebUI, Claude Desktop, VS Code. | Wenn du EINEN Server für ALLE Clients willst — einmal starten, überall nutzen. |
 
-**Beide Modi nutzen dieselbe `eam_qea_tool.py`** — du entscheidest, wie du sie einbettest.
+**Alle Modi nutzen dieselbe `eam_qea_tool.py`** — du entscheidest, wie du sie einbettest.
 
 | Quickstart-Guide | Datei |
 |---|---|
 | Open-WebUI (nativ) | [`openwebui_integration.md`](openwebui_integration.md) |
 | Lokaler Wrapper | [`local_wrapper.md`](local_wrapper.md) |
+| MCP-Server | [`mcp_server.md`](mcp_server.md) |
 
 ---
 
@@ -130,11 +132,15 @@ Ohne diese Dateien arbeitet der QEA-Analyzer als reiner QEA-Parser. Mit ihnen wi
 ```
 eam-qea-tool/
 ├── eam_qea_tool.py              # Gemeinsame Codebasis (~95 KB)
-├── webui_api.py                 # Lokaler Wrapper (NEU v0.3)
-├── system_prompt.md             # System Prompt für beide Modi
+├── webui_api.py                 # Lokaler Wrapper (v0.3)
+├── mcp_server.py                # MCP-Server (NEU v0.4)
+├── system_prompt.md             # System Prompt für alle Modi
 ├── openwebui_integration.md     # Anleitung: nativer Open-WebUI-Modus
 ├── local_wrapper.md             # Anleitung: lokaler API-Wrapper-Modus
+├── mcp_server.md                # Anleitung: MCP-Server (NEU v0.4)
+├── requirements-mcp.txt         # Dependencies für MCP-Server
 ├── Demo-Output/                 # Beispiel-Ausgaben
+├── docs/plans/                  # Implementierungspläne
 ├── LICENSE                      # Apache 2.0
 └── README.md                    # Diese Datei
 ```
@@ -145,6 +151,7 @@ eam-qea-tool/
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| **v0.4** | 30.06.2026 | MCP-Server (`mcp_server.py`) — standardisiertes Protokoll für Open-WebUI, Claude Desktop, VS Code |
 | **v0.3** | 29.06.2026 | Lokaler Wrapper-Modus (`webui_api.py`) von [@fkraemer-coder](https://github.com/fkraemer-coder) |
 | v0.2 | 10.06.2026 | L4-Prozessextraktion aus Activity-Diagrammen |
 | v0.1 | 08.06.2026 | Initial Release: QEA-Analyse, NAF-Validierung |
@@ -158,8 +165,8 @@ eam-qea-tool/
 | Wer | Was |
 |-----|-----|
 | [@schmitze87](https://github.com/schmitze87) (Markus Schmitz) | **AAroN** — Die gesamte Wissensbasis. 15+ Java-Processors, die die proprietäre QEA-Tabellenstruktur von Sparx EA dokumentieren. |
-| [@fkraemer-coder](https://github.com/fkraemer-coder) | **Lokaler Wrapper** — webui_api.py, entkoppelt das Tool von Open-WebUI. |
-|  Michael Estel (mit KI-Agent) | Analyse der AAroN-Processors, Extraktion des Tabellenwissens, Python-Portierung & Open WebUI Integration |
+| [@fkraemer-coder](https://github.com/fkraemer-coder) | **Lokaler Wrapper** — `webui_api.py`, entkoppelt das Tool von Open-WebUI. |
+|  Michael Estel (mit KI-Agent) | Analyse der AAroN-Processors, Extraktion des Tabellenwissens, Python-Portierung, MCP-Server & Integration |
 
 > **Original-Repo:** [github.com/schmitze87/AAroN](https://github.com/schmitze87/AAroN) — ⭐ Empfehlung: gebt Markus einen Star für seine Arbeit an AAroN.
 
@@ -169,4 +176,4 @@ Apache License 2.0
 
 ---
 
-*Open-WebUI (nativ): [openwebui_integration.md](openwebui_integration.md) | Lokaler Wrapper: [local_wrapper.md](local_wrapper.md)*
+*Open-WebUI (nativ): [openwebui_integration.md](openwebui_integration.md) | Lokaler Wrapper: [local_wrapper.md](local_wrapper.md) | MCP-Server: [mcp_server.md](mcp_server.md)*
